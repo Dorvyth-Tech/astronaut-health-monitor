@@ -13,38 +13,49 @@ from core.services import (
 
 
 class ClinicalAlgorithmTests(TestCase):
+    # The status rules are now baseline-relative and need a short history, so
+    # these three tests pass a series [(t, value), ...] instead of one value.
+    # See docs/rule-test-cases.md and core/tests_rules.py for the full rule cases.
+
     def test_sleep_thresholds(self):
-        # Sleep baseline 7.2
-        nominal = evaluate_metric_status('sleep', 7.0, 7.2)
+        # Sleep baseline 7.2: caution = >1 h below for 3 nights,
+        # critical = <5 h on 2 nights in a row.
+        nominal = evaluate_metric_status('sleep', [(140, 7.0), (141, 6.8), (142, 6.5)], 7.2)
         self.assertEqual(nominal['status'], 'nominal')
 
-        caution = evaluate_metric_status('sleep', 5.8, 7.2)
+        caution = evaluate_metric_status('sleep', [(140, 6.0), (141, 5.9), (142, 5.8)], 7.2)
         self.assertEqual(caution['status'], 'caution')
 
-        critical = evaluate_metric_status('sleep', 4.2, 7.2)
+        critical = evaluate_metric_status('sleep', [(141, 4.8), (142, 4.9)], 7.2)
         self.assertEqual(critical['status'], 'critical')
 
     def test_cabin_co2_thresholds(self):
-        # CO2 thresholds: caution > 3000, critical > 5000
-        nominal = evaluate_metric_status('cabin_co2', 2450.0, 2450.0)
+        # CO2 is hourly and absolute: caution = 3,500 ppm or more for 24 h,
+        # critical = above 5,000 ppm for 6 h (or above 7,000 at any time).
+        steady = [(h, 2450.0) for h in range(1, 25)]
+        nominal = evaluate_metric_status('cabin_co2', steady, 2450.0)
         self.assertEqual(nominal['status'], 'nominal')
 
-        caution = evaluate_metric_status('cabin_co2', 3200.0, 2450.0)
+        high_day = [(h, 4000.0) for h in range(1, 25)]
+        caution = evaluate_metric_status('cabin_co2', high_day, 2450.0)
         self.assertEqual(caution['status'], 'caution')
 
-        critical = evaluate_metric_status('cabin_co2', 5200.0, 2450.0)
+        six_hours = [(h, 5500.0) for h in range(1, 7)]
+        critical = evaluate_metric_status('cabin_co2', six_hours, 2450.0)
         self.assertEqual(critical['status'], 'critical')
 
     def test_body_temp_thresholds(self):
-        # Body temp: caution outside 36.0 - 37.5
-        nominal = evaluate_metric_status('body_temp', 36.8, 36.7)
+        # Body temp baseline 36.7: caution = +0.5 to +1.0 C for 2 days,
+        # critical = +1.0 C or more. The science table has no low-temperature
+        # band, so the old "35.8 is caution (hypothermia)" assertion was removed.
+        nominal = evaluate_metric_status('body_temp', [(141, 36.8), (142, 36.9)], 36.7)
         self.assertEqual(nominal['status'], 'nominal')
 
-        caution_hypothermia = evaluate_metric_status('body_temp', 35.8, 36.7)
-        self.assertEqual(caution_hypothermia['status'], 'caution')
-
-        caution_fever = evaluate_metric_status('body_temp', 37.8, 36.7)
+        caution_fever = evaluate_metric_status('body_temp', [(141, 37.4), (142, 37.5)], 36.7)
         self.assertEqual(caution_fever['status'], 'caution')
+
+        critical_fever = evaluate_metric_status('body_temp', [(142, 37.8)], 36.7)
+        self.assertEqual(critical_fever['status'], 'critical')
 
     def test_consecutive_trend_detection(self):
         # 4 consecutive drops

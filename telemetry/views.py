@@ -14,7 +14,7 @@ from telemetry.models import Reading, CheckIn
 from alerts.models import Alert
 from core.models import Baseline
 from core.constants import METRIC_CONFIG, METRICS, METRIC_CHOICES
-from core.services import sync_alerts_for_astronaut, evaluate_metric_status, generate_sparkline_svg
+from core.services import sync_alerts_for_astronaut, reading_statuses, amber_edges, generate_sparkline_svg
 from django.core.paginator import Paginator
 
 
@@ -57,8 +57,10 @@ def api_readings(request):
     baseline_val = baseline_obj.baseline_value if baseline_obj else METRIC_CONFIG.get(metric, {}).get('default_baseline', 7.2)
 
     config = METRIC_CONFIG.get(metric, {})
-    caution_low = config.get('caution_low')
-    caution_high = config.get('caution_high')
+    # Chart guide lines: where the amber band starts for this baseline (core/rules.py)
+    edges = amber_edges(metric, baseline_val)
+    caution_low = edges['low']
+    caution_high = edges['high']
 
     return JsonResponse({
         'metric': metric,
@@ -305,7 +307,7 @@ def history_view(request):
             'type': 'alert',
             'type_label': 'Alert',
             'indicator': f"{cfg.get('label', al.metric)} Architecture" if al.metric == 'sleep' else cfg.get('label', al.metric),
-            'recorded_value': f"Down {al.title.split()[-1] if 'days' in al.title else ''}, {r_val:.1f} {unit}".strip(),
+            'recorded_value': f"{r_val:.1f} {unit}".strip(),
             'val_number': f"{r_val:.1f}",
             'val_unit': unit,
             'value_highlight': 'text-error' if al.severity == 'critical' else ('text-[#FFB020]' if al.severity == 'caution' else 'text-primary'),
@@ -359,12 +361,21 @@ def history_view(request):
     if indicator_param != 'all':
         readings_qs = readings_qs.filter(metric=indicator_param)
 
+    # Status of each reading as it looked when it arrived (rules need recent history,
+    # so they are evaluated per metric once, then looked up by reading id).
+    status_by_reading = {}
+
+    def eval_for(reading):
+        if reading.metric not in status_by_reading:
+            status_by_reading[reading.metric] = reading_statuses(astronaut, reading.metric, baselines)
+        return status_by_reading[reading.metric][reading.id]
+
     # Sample readings to keep log clean (latest 60 readings in window)
     for rd in readings_qs.order_by('-mission_day', '-timestamp')[:60]:
         cfg = METRIC_CONFIG.get(rd.metric, {})
         unit = cfg.get('unit', '')
         b_val = baselines.get(rd.metric, cfg.get('default_baseline', 0.0))
-        eval_dict = evaluate_metric_status(rd.metric, rd.value, b_val)
+        eval_dict = eval_for(rd)
         status = eval_dict['status']
 
         if severity_param in ('nominal', 'caution', 'critical') and status != severity_param:
@@ -389,17 +400,21 @@ def history_view(request):
             'recorded_value': f"{fmt_val} {unit}".strip(),
             'val_number': fmt_val,
             'val_unit': unit,
-            'value_highlight': 'text-error' if status == 'critical' else ('text-[#FFB020]' if status == 'caution' else 'text-primary'),
+            'value_highlight': 'text-error' if status == 'critical' else ('text-[#FFB020]' if status == 'caution' else ('text-outline' if status == 'no_data' else 'text-primary')),
             'sub_text': f"Baseline: {b_val} {unit}".strip(),
             'status': status,
             'status_label': eval_dict['label'],
-            'status_icon': 'check_circle' if status == 'nominal' else ('warning' if status == 'caution' else 'error'),
-            'status_class': 'bg-error-container text-on-error-container' if status == 'critical' else ('bg-[#ffb020]/15 text-[#ffb020]' if status == 'caution' else 'bg-[#22e3a0]/15 text-[#22e3a0]'),
+            'status_icon': {'nominal': 'check_circle', 'caution': 'warning', 'no_data': 'help'}.get(status, 'error'),
+            'status_class': {
+                'critical': 'bg-error-container text-on-error-container',
+                'caution': 'bg-[#ffb020]/15 text-[#ffb020]',
+                'no_data': 'bg-surface-container-highest text-outline',
+            }.get(status, 'bg-[#22e3a0]/15 text-[#22e3a0]'),
             'sparkline': metric_sparklines.get(rd.metric),
             'action_type': 'text',
             'action_label': f"Telemetry #{rd.id}",
             'title': f"{cfg.get('label', rd.metric)} Synchronized ({fmt_val} {unit})",
-            'message': f"Continuous biometrics confirmed baseline resonance within nominal deep-space bounds.",
+            'message': eval_dict['reason'],
         })
 
     # Sort descending by (day, timestamp)
@@ -414,7 +429,7 @@ def history_view(request):
     ).count()
 
     # Timeline recent items (top 6 high-interest items)
-    timeline_items = [item for item in audit_items if item['type'] in ('alert', 'checkin') or item['status'] != 'nominal'][:6]
+    timeline_items = [item for item in audit_items if item['type'] in ('alert', 'checkin') or item['status'] in ('caution', 'critical')][:6]
     if len(timeline_items) < 4:
         timeline_items = audit_items[:6]
 

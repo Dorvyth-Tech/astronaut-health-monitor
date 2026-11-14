@@ -134,7 +134,7 @@ def _resting_hr(readings, baseline, extras):
         return RuleResult(RED, f"Resting HR {pct:.0f}% above baseline for {red_days} days (red above 20%).")
     if amber_days >= 3:
         return RuleResult(AMBER, f"Resting HR {pct:.0f}% above baseline for {amber_days} days.")
-    return RuleResult(GREEN, f"Resting HR {pct:+.0f}% from baseline, within the 10% band.")
+    return RuleResult(GREEN, f"Resting HR {pct:+.0f}% from baseline; no 3-day run more than 10% above.")
 
 
 def _hrv(readings, baseline, extras):
@@ -158,7 +158,7 @@ def _hrv(readings, baseline, extras):
         return RuleResult(RED, f"HRV {drop:.0f}% below baseline for {amber_days} days while resting HR is red.")
     if amber_days >= 3:
         return RuleResult(AMBER, f"HRV {drop:.0f}% below baseline for {amber_days} days.")
-    return RuleResult(GREEN, f"HRV {-drop:+.0f}% from baseline, within the 15% band.")
+    return RuleResult(GREEN, f"HRV {-drop:+.0f}% from baseline; no 3-day run more than 15% below.")
 
 
 def _exercise(readings, baseline, extras):
@@ -234,7 +234,7 @@ def _body_temp(readings, baseline, extras):
         return RuleResult(AMBER, f"Body temperature {rise:.1f} C above baseline for {len(warm)} days.")
     if symptom_today:
         return RuleResult(AMBER, "New symptom logged today.")
-    return RuleResult(GREEN, f"Body temperature {rise:+.1f} C from baseline, within the 0.5 C band.")
+    return RuleResult(GREEN, f"Body temperature {rise:+.1f} C from baseline; no 2-day run more than 0.5 C above.")
 
 
 def _sleep(readings, baseline, extras):
@@ -261,7 +261,7 @@ def _sleep(readings, baseline, extras):
         return RuleResult(RED, f"Sleep {short:.1f} h below baseline for {red_nights} nights (red above 2 h).")
     if amber_nights >= 3:
         return RuleResult(AMBER, f"Sleep {short:.1f} h below baseline for {amber_nights} nights.")
-    return RuleResult(GREEN, f"Sleep {latest:g} h, within 1 h of the {baseline:g} h baseline.")
+    return RuleResult(GREEN, f"Sleep {latest:g} h against a {baseline:g} h baseline; no 3-night run more than 1 h below.")
 
 
 def _mood(readings, baseline, extras):
@@ -289,7 +289,7 @@ def _mood(readings, baseline, extras):
         return RuleResult(RED, f"Mood {drop:g} points below baseline for {long_days} days.")
     if amber_days >= 3:
         return RuleResult(AMBER, f"Mood {drop:g} points below baseline for {amber_days} days.")
-    return RuleResult(GREEN, f"Mood {-drop:+g} points from baseline, within the normal band.")
+    return RuleResult(GREEN, f"Mood {-drop:+g} points from baseline; no 3-day run with a drop of more than 0.5.")
 
 
 def _cabin_co2(readings, baseline, extras):
@@ -315,7 +315,7 @@ def _cabin_co2(readings, baseline, extras):
         return RuleResult(NO_DATA, f"Cabin CO2: only {len(window)} of the last 24 hours have readings.")
     if all(v >= 3500 for _, v in window):
         return RuleResult(AMBER, f"Cabin CO2 at 3,500 ppm or more for 24 hours (latest {latest:g} ppm).")
-    return RuleResult(GREEN, f"Cabin CO2 {latest:g} ppm, normal.")
+    return RuleResult(GREEN, f"Cabin CO2 {latest:g} ppm; not 3,500 ppm or more for the whole last 24 hours.")
 
 
 # indicator name -> its rule function
