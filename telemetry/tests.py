@@ -1,3 +1,4 @@
+from django.contrib.auth.models import User
 from django.test import TestCase, Client
 from django.urls import reverse
 from core.models import AstronautProfile, Baseline
@@ -15,6 +16,12 @@ class TelemetryTests(TestCase):
             is_active_commander=True
         )
         Baseline.objects.create(astronaut=self.astronaut, metric='sleep', baseline_value=7.2)
+        self.user = User.objects.create_user(
+            username="amara.reyes",
+            email="amara.reyes@mission.example",
+            password="validAccess2026"
+        )
+        self.client.force_login(self.user)
         Reading.objects.create(
             astronaut=self.astronaut,
             metric='sleep',

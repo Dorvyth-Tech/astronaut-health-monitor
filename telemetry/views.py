@@ -14,7 +14,7 @@ from telemetry.models import Reading, CheckIn
 from alerts.models import Alert
 from core.models import Baseline
 from core.constants import METRIC_CONFIG, METRICS, METRIC_CHOICES
-from core.services import sync_alerts_for_astronaut, reading_statuses, amber_edges, generate_sparkline_svg
+from core.services import sync_alerts_for_astronaut, reading_statuses, amber_edges, generate_sparkline_svg, get_baselines
 from django.core.paginator import Paginator
 
 
@@ -53,8 +53,7 @@ def api_readings(request):
         values.append(r.value)
 
     # Fetch astronaut baseline
-    baseline_obj = Baseline.objects.filter(astronaut=astronaut, metric=metric).first()
-    baseline_val = baseline_obj.baseline_value if baseline_obj else METRIC_CONFIG.get(metric, {}).get('default_baseline', 7.2)
+    baseline_val = get_baselines(astronaut).get(metric, METRIC_CONFIG.get(metric, {}).get('default_baseline', 7.2))
 
     config = METRIC_CONFIG.get(metric, {})
     # Chart guide lines: where the amber band starts for this baseline (core/rules.py)
@@ -258,7 +257,7 @@ def history_view(request):
         day_min = 1
 
     # Baselines dictionary
-    baselines = {b.metric: b.baseline_value for b in Baseline.objects.filter(astronaut=astronaut)}
+    baselines = get_baselines(astronaut)
 
     # Location mappings for realistic audit provenance
     sensor_locations = {
@@ -397,7 +396,12 @@ def history_view(request):
             'sort_key': (rd.mission_day, rd.timestamp.timestamp()),
             'day': rd.mission_day,
             'time_str': rd.timestamp.strftime('%H:%M'),
-            'location': sensor_locations.get(rd.metric, 'Biosensor Stream'),
+            # Show where the value came from (SRS FR-11). A simulated value keeps its
+            # made-up sensor name but is clearly marked, so it never looks like a real sensor.
+            'location': (
+                f"Simulated · {sensor_locations.get(rd.metric, 'Biosensor Stream')}"
+                if rd.source == 'simulated' else rd.get_source_display()
+            ),
             'type': 'reading',
             'type_label': 'Reading',
             'icon': cfg.get('icon', 'monitor_heart'),

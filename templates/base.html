@@ -327,6 +327,13 @@
 
     <!-- Main Content Dynamic Container -->
     <main class="w-full pt-16 bg-transparent flex-1">
+      {% if is_simulated_data %}
+      <!-- Shown whenever the astronaut's readings are simulated demo data -->
+      <div class="w-full px-space-md py-1.5 text-center text-xs font-mono bg-[rgba(255,176,32,0.2)] text-[#FFB020] border-b border-[#FFB020]/30">
+        <span class="material-symbols-outlined text-[14px] align-middle">science</span>
+        SIMULATED DATA &mdash; demo crew values generated for this prototype, not real astronaut data.
+      </div>
+      {% endif %}
       {% block content %}{% endblock %}
     </main>
 

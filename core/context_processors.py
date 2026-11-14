@@ -1,4 +1,5 @@
 from datetime import datetime
+from django.conf import settings
 from django.utils import timezone
 
 
@@ -18,27 +19,13 @@ def spacepulse_context(request):
     Context processor to provide global HUD telemetry context
     to base templates and all views.
     """
-    from core.models import AstronautProfile
+    from core.views import get_active_astronaut
     from alerts.models import Alert
+    from telemetry.models import Reading
 
     astronaut = None
     try:
-        # Check session override first
-        active_id = request.session.get('active_astronaut_id')
-        if active_id:
-            astronaut = AstronautProfile.objects.filter(id=active_id).first()
-
-        # If not found and user logged in, match by user email
-        if not astronaut and hasattr(request, 'user') and request.user.is_authenticated:
-            astronaut = AstronautProfile.objects.filter(email=request.user.email).first()
-
-        # Fallback to designated active commander
-        if not astronaut:
-            astronaut = AstronautProfile.objects.filter(is_active_commander=True).first()
-
-        # Final fallback
-        if not astronaut:
-            astronaut = AstronautProfile.objects.first()
+        astronaut = get_active_astronaut(request)
     except Exception:
         pass
 
@@ -52,7 +39,18 @@ def spacepulse_context(request):
         except Exception:
             pass
 
+    # True when any of this astronaut's readings is simulated: base.html then
+    # shows the "Simulated data" banner (template contract: is_simulated).
+    is_simulated_data = False
+    if astronaut:
+        try:
+            is_simulated_data = Reading.objects.filter(astronaut=astronaut, source='simulated').exists()
+        except Exception:
+            pass
+
     return {
+        'demo_mode': settings.DEMO_MODE,
+        'is_simulated_data': is_simulated_data,
         'current_astronaut': astronaut,
         'greeting': get_greeting(),
         'unacknowledged_alerts_count': unacknowledged_alerts_count,
