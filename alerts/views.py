@@ -10,7 +10,7 @@ from alerts.models import Alert
 from core.models import Baseline
 from telemetry.models import Reading
 from core.constants import METRIC_CONFIG
-from core.services import sync_alerts_for_astronaut, amber_edges
+from core.services import sync_alerts_for_astronaut, amber_edges, get_baselines
 
 
 def alerts_list(request):
@@ -125,8 +125,7 @@ def alert_detail(request, alert_id):
     chart_values = [r.value for r in readings]
 
     # Baseline & thresholds
-    baseline_obj = Baseline.objects.filter(astronaut=astronaut, metric=alert.metric).first()
-    baseline_val = baseline_obj.baseline_value if baseline_obj else METRIC_CONFIG.get(alert.metric, {}).get('default_baseline', 7.2)
+    baseline_val = get_baselines(astronaut).get(alert.metric, METRIC_CONFIG.get(alert.metric, {}).get('default_baseline', 7.2))
 
     config = METRIC_CONFIG.get(alert.metric, {})
     # Guide line for the chart: where the amber band starts (core/rules.py).

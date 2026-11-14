@@ -30,6 +30,10 @@ class SleepDeclineScenarioTests(TestCase):
         cls.cmdr = AstronautProfile.objects.get(email='amara.reyes@mission.example')
         cls.evals = evaluate_astronaut_metrics(cls.cmdr)
 
+    def setUp(self):
+        # the seed creates a login for every astronaut (username = part of the email before @)
+        self.client.login(username='amara.reyes', password='validAccess2026')
+
     def test_baselines_come_from_days_1_to_14_for_every_indicator(self):
         for astro in AstronautProfile.objects.all():
             for metric in METRICS:

@@ -27,6 +27,19 @@ METRIC_CHOICES = [
     ('cabin_co2', 'Cabin CO2 Concentration'),
 ]
 
+# Plausibility limits for a baseline someone types in by hand. They only catch
+# typing mistakes (a heart rate of 700, a mood of 40). They are NOT clinical
+# thresholds: the status rules live in core/rules.py.
+BASELINE_PLAUSIBLE_RANGE = {
+    'resting_hr': (30, 120),
+    'hrv': (5, 200),
+    'sleep': (2, 14),
+    'exercise': (0, 600),
+    'body_temp': (34, 40),
+    'mood': (1, 5),
+    'cabin_co2': (300, 10000),
+}
+
 SEVERITY_CHOICES = [
     ('nominal', 'Nominal'),
     ('caution', 'Caution'),

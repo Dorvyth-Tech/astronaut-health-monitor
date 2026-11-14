@@ -116,7 +116,8 @@
         </div>
       </div>
 
-      <!-- Crew Roster Switcher (All 4 Seeded Astronauts) -->
+      {% if demo_mode %}
+      <!-- Crew Roster Switcher (All 4 Seeded Astronauts). DEMO_MODE only. -->
       <div class="rounded-xl bg-surface-container/70 backdrop-blur-md p-space-md border border-white/5 shadow-xl flex flex-col gap-space-sm">
         <div class="flex items-center justify-between pb-1 border-b border-white/5">
           <span class="font-label-caps text-xs text-outline uppercase tracking-wider">Ares V Crew Manifest</span>
@@ -143,6 +144,7 @@
           {% endfor %}
         </div>
       </div>
+      {% endif %}
 
     </div>
 
@@ -213,6 +215,22 @@
                     {{ item.unit }}
                   </span>
                 </div>
+              </div>
+
+              <!-- Where this baseline comes from: computed from days 1-14, or a manual override -->
+              <div class="flex items-center justify-between gap-2 text-[11px] font-mono">
+                {% if item.kind == 'manual' %}
+                <span class="text-[#FFB020]">
+                  Manual override{% if item.by %} by {{ item.by.get_username }}{% endif %}{% if item.at %}, {{ item.at|date:"Y-m-d H:i" }} UTC{% endif %}
+                </span>
+                <label class="text-outline flex items-center gap-1 shrink-0">
+                  <input type="checkbox" name="reset_{{ item.key }}"> Use computed
+                </label>
+                {% elif item.kind == 'computed' %}
+                <span class="text-[#22E3A0]">Computed from mission days 1-14</span>
+                {% else %}
+                <span class="text-outline">Default value (needs 14 days of readings to compute)</span>
+                {% endif %}
               </div>
             </div>
             {% endfor %}

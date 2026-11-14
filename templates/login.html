@@ -280,7 +280,8 @@
           </button>
         </div>
 
-        <!-- Quick Demo Credentials Selector -->
+        {% if demo_mode %}
+        <!-- Quick Demo Credentials Selector (DEMO_MODE only) -->
         <div class="pt-3 border-t border-white/10 text-center">
           <span class="text-xs text-white/50 block mb-2 font-mono">SIMULATION PRESETS</span>
           <div class="flex items-center justify-center gap-2">
@@ -300,6 +301,7 @@
             </button>
           </div>
         </div>
+        {% endif %}
 
       </form>
     </div>

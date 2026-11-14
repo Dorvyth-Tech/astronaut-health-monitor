@@ -2,9 +2,12 @@
 Core views for Space-Pulse: Dashboard, Login, Logout, Profile, Ground Support.
 """
 
+from django.conf import settings
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth.decorators import login_not_required
 from django.contrib.auth.models import User
 from django.contrib import messages
 from django.http import JsonResponse
@@ -15,6 +18,10 @@ from telemetry.models import Reading, CheckIn
 from alerts.models import Alert
 from core.constants import METRIC_CONFIG, METRICS
 from core.services import (
+    baseline_details,
+    get_baselines,
+    read_baseline_form,
+    save_baseline_changes,
     evaluate_astronaut_metrics,
     detect_consecutive_trend,
     generate_sparkline_svg,
@@ -24,31 +31,53 @@ from core.services import (
 )
 
 
+# The shared password of the seeded demo accounts. Outside DEMO_MODE it is just
+# the real password of those accounts; it is never a master key (see login_view).
+DEMO_PASSWORD = "validAccess2026"
+
+
 def get_active_astronaut(request):
-    """Helper to retrieve the current active astronaut from session or defaults."""
-    astro_id = request.session.get('active_astronaut_id')
-    if astro_id:
-        astro = AstronautProfile.objects.filter(id=astro_id).first()
+    """The astronaut whose data this request is allowed to see.
+
+    Normal mode: only the astronaut linked to the logged-in user (same email).
+    DEMO_MODE: the crew switcher may pick any astronaut (kept in the session).
+    Returns None when there is no such astronaut; views then go to the login page.
+    """
+    if not request.user.is_authenticated:
+        return None
+
+    if settings.DEMO_MODE:
+        astro_id = request.session.get('active_astronaut_id')
+        if astro_id:
+            astro = AstronautProfile.objects.filter(id=astro_id).first()
+            if astro:
+                return astro
+
+    if request.user.email:
+        astro = AstronautProfile.objects.filter(email__iexact=request.user.email).first()
         if astro:
             return astro
 
-    if request.user.is_authenticated and request.user.email:
-        astro = AstronautProfile.objects.filter(email=request.user.email).first()
-        if astro:
-            return astro
-
-    astro = AstronautProfile.objects.filter(is_active_commander=True).first()
-    if not astro:
-        astro = AstronautProfile.objects.first()
-    return astro
+    if settings.DEMO_MODE:
+        # e.g. the admin account in a demo: fall back to the commander
+        return (
+            AstronautProfile.objects.filter(is_active_commander=True).first()
+            or AstronautProfile.objects.first()
+        )
+    return None
 
 
+@login_not_required
 def login_view(request):
     """
     Cosmic glassmorphic login view.
     Authenticates crew credentials and routes to the requested path.
+    This view and logout_view are the only ones that do not need a login.
     """
     next_url = request.GET.get('next') or request.POST.get('next') or reverse('core:dashboard')
+    # Only follow ?next= to a page on this site.
+    if not url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()}):
+        next_url = reverse('core:dashboard')
     error_message = None
 
     if request.method == 'POST':
@@ -62,14 +91,14 @@ def login_view(request):
             user_match = User.objects.filter(username__iexact=email.split('@')[0]).first()
 
         if user_match:
-            # Check password or authenticate
-            if user_match.check_password(password) or password == "validAccess2026":
+            # Check the real password. In DEMO_MODE the shared demo password also works.
+            if user_match.check_password(password) or (settings.DEMO_MODE and password == DEMO_PASSWORD):
                 user = user_match
 
         # Fallback profile check for demo flexibility
         astro_match = AstronautProfile.objects.filter(email__iexact=email).first()
-        if not user and astro_match and password == "validAccess2026":
-            # If user record doesn't exist yet, create one
+        if not user and settings.DEMO_MODE and astro_match and password == DEMO_PASSWORD:
+            # If user record doesn't exist yet, create one (demo only)
             user, _ = User.objects.get_or_create(
                 username=email.split('@')[0],
                 email=email,
@@ -78,17 +107,22 @@ def login_view(request):
             user.set_password("validAccess2026")
             user.save()
 
-        if user:
-            login(request, user)
-            # Find matching astronaut profile
+        # Find the astronaut linked to this user (same email).
+        astro = None
+        if user and user.email:
             astro = AstronautProfile.objects.filter(email__iexact=user.email).first()
-            if not astro:
-                astro = AstronautProfile.objects.filter(is_active_commander=True).first()
-            if astro:
+        if user and not astro and settings.DEMO_MODE:
+            astro = AstronautProfile.objects.filter(is_active_commander=True).first()
+
+        if user and astro:
+            login(request, user)
+            if settings.DEMO_MODE:
                 request.session['active_astronaut_id'] = astro.id
 
             # Route to their requested path
             return redirect(next_url)
+        elif user:
+            error_message = "This account is not linked to an astronaut profile."
         else:
             error_message = "Email or password not recognised."
 
@@ -99,6 +133,7 @@ def login_view(request):
     })
 
 
+@login_not_required
 def logout_view(request):
     """Logs out user and redirects to the login screen."""
     logout(request)
@@ -119,7 +154,7 @@ def dashboard_view(request):
     sync_alerts_for_astronaut(astronaut)
 
     # Fetch personal baselines
-    baselines = {b.metric: b.baseline_value for b in Baseline.objects.filter(astronaut=astronaut)}
+    baselines = get_baselines(astronaut)
 
     # Evaluate all 7 metrics with the science rules (core/rules.py via services)
     metric_evals = evaluate_astronaut_metrics(astronaut, baselines)
@@ -253,8 +288,8 @@ def profile_view(request):
     Displays astronaut bio-dossier, crew roster, and editable physiological baselines.
     Handles POST submissions to update baselines and recalibrate active alerts.
     """
-    # Optional crew switcher
-    switch_id = request.GET.get('switch')
+    # Crew switcher: DEMO_MODE only. Otherwise ?switch= is ignored.
+    switch_id = request.GET.get('switch') if settings.DEMO_MODE else None
     if switch_id:
         target_astro = AstronautProfile.objects.filter(id=switch_id).first()
         if target_astro:
@@ -270,6 +305,11 @@ def profile_view(request):
 
     if request.method == 'POST':
         try:
+            # Check the baseline fields first, so nothing is saved if one is invalid.
+            baseline_changes, baseline_errors = read_baseline_form(request.POST, baseline_details(astronaut))
+            if baseline_errors:
+                raise ValueError(" ".join(baseline_errors))
+
             # Update astronaut profile attributes
             name_val = request.POST.get('name', '').strip()
             rank_val = request.POST.get('rank', '').strip()
@@ -286,17 +326,8 @@ def profile_view(request):
                 astronaut.role_description = role_val
             astronaut.save()
 
-            # Update baselines for all 7 metrics
-            for m_key in METRICS:
-                input_name = f"baseline_{m_key}"
-                raw_val = request.POST.get(input_name)
-                if raw_val is not None and raw_val != '':
-                    float_val = float(raw_val)
-                    Baseline.objects.update_or_create(
-                        astronaut=astronaut,
-                        metric=m_key,
-                        defaults={'baseline_value': float_val}
-                    )
+            # Only changed baselines are saved, and they become labelled manual overrides.
+            save_baseline_changes(astronaut, baseline_changes, request.user)
 
             # Recompute active signals and thresholds in SQLite
             sync_alerts_for_astronaut(astronaut)
@@ -305,7 +336,7 @@ def profile_view(request):
             error_message = f"Error saving baselines: {str(e)}"
 
     # Fetch updated baselines
-    current_baselines = {b.metric: b.baseline_value for b in Baseline.objects.filter(astronaut=astronaut)}
+    details = baseline_details(astronaut)
 
     # Clinical rationale annotations
     clinical_notes = {
@@ -342,7 +373,8 @@ def profile_view(request):
     baseline_items = []
     for m_key in METRICS:
         cfg = METRIC_CONFIG.get(m_key, {})
-        val = current_baselines.get(m_key, cfg.get('default_baseline', 0.0))
+        detail = details.get(m_key, {})
+        val = detail.get('value', cfg.get('default_baseline', 0.0))
         note = clinical_notes.get(m_key, {})
 
         baseline_items.append({
@@ -352,11 +384,15 @@ def profile_view(request):
             'icon': cfg.get('icon', 'insights'),
             'step': cfg.get('step', 1),
             'value': val,
+            'kind': detail.get('kind', 'none'),     # manual / computed / stored / none
+            'by': detail.get('by'),
+            'at': detail.get('at'),
             'rationale': note.get('rationale', ''),
             'reference': note.get('reference', ''),
         })
 
-    all_crew = AstronautProfile.objects.all().order_by('id')
+    # The crew list is only shown (and only loaded) in DEMO_MODE.
+    all_crew = AstronautProfile.objects.all().order_by('id') if settings.DEMO_MODE else AstronautProfile.objects.none()
 
     return render(request, 'core/profile.html', {
         'active_nav': 'profile',
@@ -403,7 +439,7 @@ def ground_support_view(request):
             success_msg = f"Transmission packet logged and staged for DSN uplink pass. Estimated ground receipt in 18m 42s."
 
     # Baselines
-    baselines = {b.metric: b.baseline_value for b in Baseline.objects.filter(astronaut=astronaut)}
+    baselines = get_baselines(astronaut)
 
     # Recent 7 readings per metric for vector cards
     def get_recent_7(metric_name, default_vals):
