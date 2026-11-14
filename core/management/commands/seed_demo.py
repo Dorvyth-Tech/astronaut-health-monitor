@@ -149,6 +149,7 @@ class Command(BaseCommand):
                 'sleep': 7.2,
                 'exercise': 60.0,
                 'body_temp': 36.7,
+                'mood': 4.0,
                 'mood_stress': 3.0,
                 'cabin_co2': 2300.0,
             },
@@ -158,6 +159,7 @@ class Command(BaseCommand):
                 'sleep': 7.5,
                 'exercise': 60.0,
                 'body_temp': 36.6,
+                'mood': 4.0,
                 'mood_stress': 2.5,
                 'cabin_co2': 2300.0,
             },
@@ -167,6 +169,7 @@ class Command(BaseCommand):
                 'sleep': 7.0,
                 'exercise': 65.0,
                 'body_temp': 36.8,
+                'mood': 4.0,
                 'mood_stress': 3.2,
                 'cabin_co2': 2300.0,
             },
@@ -176,6 +179,7 @@ class Command(BaseCommand):
                 'sleep': 7.4,
                 'exercise': 55.0,
                 'body_temp': 36.7,
+                'mood': 4.0,
                 'mood_stress': 3.0,
                 'cabin_co2': 2300.0,
             },
@@ -256,7 +260,7 @@ class Command(BaseCommand):
                 else:
                     temp_val = round(b_vals['body_temp'] + random.uniform(-0.15, 0.15), 1)
 
-                # 6. Mood & Stress
+                # 6. Mood (1-5, scored) and stress (1-10, display only)
                 if is_cmdr_last_7:
                     stress_val = cmdr_last_7['mood_stress'][last_7_idx]
                 else:
@@ -271,13 +275,14 @@ class Command(BaseCommand):
                 else:
                     co2_val = round(b_vals['cabin_co2'] + random.uniform(-80, 80), 0)
 
-                # Create readings for the 7 metrics
+                # Create readings for the 7 indicators (plus the stress self-report)
                 day_metrics = [
                     ('resting_hr', rhr_val),
                     ('hrv', hrv_val),
                     ('sleep', sleep_val),
                     ('exercise', ex_val),
                     ('body_temp', temp_val),
+                    ('mood', mood_val),
                     ('mood_stress', stress_val),
                     ('cabin_co2', co2_val),
                 ]
@@ -290,7 +295,7 @@ class Command(BaseCommand):
                             value=m_val,
                             mission_day=day,
                             timestamp=day_timestamp,
-                            source='sensor' if m_key not in ('mood_stress',) else 'manual'
+                            source='manual' if m_key in ('mood', 'mood_stress') else 'sensor'
                         )
                     )
 
@@ -446,7 +451,8 @@ class Command(BaseCommand):
         """Turns the freshly generated data into the demo story.
 
         1. Baselines are computed from days 1-14 (the science definition),
-           not copied from a template. mood_stress keeps its template value.
+           not copied from a template. The stress self-report is not one of
+           the 7 indicators, so it keeps its template value.
         2. Cabin CO2 gets 48 hourly readings (shared habitat air, so every crew
            member gets the same series). The old daily CO2 rows for days 141-142
            are replaced, because the CO2 rules are hourly.
@@ -456,8 +462,6 @@ class Command(BaseCommand):
         # 1. Baselines from days 1-14
         for astro in all_astronauts:
             for metric in METRICS:
-                if metric == 'mood_stress':
-                    continue
                 early = list(
                     Reading.objects.filter(astronaut=astro, metric=metric, mission_day__lte=rules.BASELINE_DAYS)
                     .values_list('mission_day', 'value')

@@ -45,7 +45,8 @@ class SeededPagesTests(TestCase):
         base = reverse('telemetry:history')
         for query in ('', '?view=timeline', '?severity=caution', '?severity=critical',
                       '?severity=nominal', '?range=30d', '?range=mission', '?indicator=sleep',
-                      '?indicator=cabin_co2&range=30d', '?indicator=mood_stress'):
+                      '?indicator=cabin_co2&range=30d', '?indicator=mood',
+                      '?indicator=mood_stress'):
             self.get_ok(base + query)
 
     def test_alerts_list_and_every_alert_detail_render(self):

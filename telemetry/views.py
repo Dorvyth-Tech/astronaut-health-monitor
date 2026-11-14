@@ -175,6 +175,10 @@ def check_in_view(request):
                 mission_day=astronaut.current_mission_day, timestamp=now, source='manual'
             )
             Reading.objects.create(
+                astronaut=astronaut, metric='mood', value=float(mood),
+                mission_day=astronaut.current_mission_day, timestamp=now, source='manual'
+            )
+            Reading.objects.create(
                 astronaut=astronaut, metric='mood_stress', value=float(stress),
                 mission_day=astronaut.current_mission_day, timestamp=now, source='manual'
             )
@@ -264,6 +268,7 @@ def history_view(request):
         'cabin_co2': 'ECLSS Scrubber B',
         'exercise': 'ARED / Cycle Ergometer',
         'body_temp': 'Subdermal Temp Sensor',
+        'mood': 'Console Alpha',
         'mood_stress': 'EVA Console Alpha',
     }
 
@@ -383,7 +388,7 @@ def history_view(request):
 
         if rd.metric == 'cabin_co2':
             fmt_val = f"{int(round(rd.value)):,}"
-        elif rd.metric in ('resting_hr', 'hrv', 'exercise', 'mood_stress'):
+        elif rd.metric in ('resting_hr', 'hrv', 'exercise', 'mood', 'mood_stress'):
             fmt_val = f"{int(round(rd.value))}"
         else:
             fmt_val = f"{rd.value:.1f}"

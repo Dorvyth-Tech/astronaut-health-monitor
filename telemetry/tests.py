@@ -44,6 +44,15 @@ class TelemetryTests(TestCase):
         self.assertEqual(checkin.mood, 4)
         self.assertEqual(checkin.sleep_hours, 6.8)
 
+    def test_check_in_saves_the_mood_score_as_a_mood_reading(self):
+        self.client.post(reverse('telemetry:check_in'), {
+            'mood': '2', 'stress': '8', 'sleep_hours': '7.0', 'exercise_minutes': '30',
+        })
+        mood = Reading.objects.get(astronaut=self.astronaut, metric='mood')
+        self.assertEqual(mood.value, 2.0)                     # the 1-5 score, not the stress
+        stress = Reading.objects.get(astronaut=self.astronaut, metric='mood_stress')
+        self.assertEqual(stress.value, 8.0)
+
     def test_history_view(self):
         resp = self.client.get(reverse('telemetry:history') + '?metric=sleep&range=7d')
         self.assertEqual(resp.status_code, 200)
