@@ -10,7 +10,7 @@ what the views and templates already understand.
 
 from django.utils import timezone
 from core import rules
-from core.constants import METRIC_CONFIG, METRICS
+from core.constants import EXERCISE_WEEKLY_PLAN_MINUTES, METRIC_CONFIG, METRICS
 
 
 NUMBER_WORDS = {
@@ -51,7 +51,9 @@ SEVERITY_STYLE = {
     'no_data': ('bg-surface-container-highest', 'text-outline', NO_DATA_COLOR, 'No data'),
 }
 
-# Metrics with no science rule yet. They are shown on the HUD but never alert.
+# Readings with no science rule: the 1-10 stress self-report. It is not one of the
+# 7 indicators (METRICS), but it is still evaluated (always no_data) so the
+# 'cumulative stress' tile and the history page can use it. It never alerts.
 DISPLAY_ONLY_METRICS = ('mood_stress',)
 
 
@@ -129,9 +131,8 @@ def evaluate_metric_status(metric_key, series, baseline_value=None, rhr_status=N
     """Status of one metric from its recent series, via core/rules.py.
 
     series: [(t, value), ...] oldest first (see readings_to_series).
-    baseline_value: the personal baseline, or None when not ready. For
-        'exercise' it is minutes per DAY (as stored); the weekly plan used by
-        the rule is that times 7.
+    baseline_value: the personal baseline, or None when not ready. Not used
+        for 'exercise': its plan is the fixed EXERCISE_WEEKLY_PLAN_MINUTES.
     rhr_status: the resting-HR rule status, needed by the HRV combination rule.
 
     Returns the dict the views/templates use: status is nominal / caution /
@@ -143,8 +144,7 @@ def evaluate_metric_status(metric_key, series, baseline_value=None, rhr_status=N
     if metric_key in DISPLAY_ONLY_METRICS:
         result = rules.RuleResult(rules.NO_DATA, "Shown for reference. No science rule for this indicator yet.")
     elif metric_key == 'exercise':
-        weekly_plan = baseline_value * 7 if baseline_value is not None else None
-        result = rules.evaluate('exercise', weekly_totals(series), weekly_plan)
+        result = rules.evaluate('exercise', weekly_totals(series), EXERCISE_WEEKLY_PLAN_MINUTES)
     else:
         result = rules.evaluate(metric_key, series, baseline_value, rhr_status=rhr_status)
 
@@ -170,7 +170,8 @@ def evaluate_metric_status(metric_key, series, baseline_value=None, rhr_status=N
 
 
 def evaluate_astronaut_metrics(astronaut, stored_baselines=None):
-    """metric_key -> evaluation dict for all 7 metrics of one astronaut.
+    """metric_key -> evaluation dict for the 7 indicators of one astronaut
+    (plus the display-only stress self-report, which is always no_data).
 
     Resting HR is evaluated first because the HRV rule needs its status.
     """
@@ -180,7 +181,7 @@ def evaluate_astronaut_metrics(astronaut, stored_baselines=None):
 
     evals = {}
     rhr_status = None
-    for metric_key in METRICS:   # resting_hr comes before hrv in METRICS
+    for metric_key in METRICS + list(DISPLAY_ONLY_METRICS):   # resting_hr comes before hrv
         series = load_series(astronaut, metric_key)
         baseline = rule_baseline(astronaut, metric_key, stored_baselines)
         evals[metric_key] = evaluate_metric_status(metric_key, series, baseline, rhr_status=rhr_status)
@@ -227,7 +228,10 @@ def amber_edges(metric_key, baseline):
     elif metric_key == 'hrv':
         edges['low'] = baseline * 0.85         # more than 15% below
     elif metric_key == 'exercise':
-        edges['low'] = baseline * 0.90         # under 90% of plan
+        # The chart shows minutes per day, the plan is per week: 90% of the plan, per day.
+        edges['low'] = EXERCISE_WEEKLY_PLAN_MINUTES / 7 * 0.90
+    elif metric_key == 'mood':
+        edges['low'] = baseline - 0.5          # more than 0.5 points below baseline
     elif metric_key == 'resting_hr':
         edges['high'] = baseline * 1.10        # more than 10% above
     elif metric_key == 'body_temp':
@@ -423,7 +427,7 @@ def calculate_risk_vectors(metric_evals):
     """
     Derives NASA Human Research Program (HRP) 4-domain risk matrix:
     - Altered Gravity (Resting HR, HRV, Exercise)
-    - Isolation (Mood & stress, Sleep)
+    - Isolation (Mood, Sleep)
     - Closed Environment (Cabin CO2, Body temp)
     - Radiation (Prototype / No dosimeter data)
     """
@@ -440,7 +444,7 @@ def calculate_risk_vectors(metric_evals):
         return 'nodata', 'No data', 'bg-surface-container-highest text-outline font-label-caps text-label-caps', NO_DATA_COLOR
 
     grav_status, grav_label, grav_badge, grav_color = get_group_status(['resting_hr', 'hrv', 'exercise'])
-    iso_status, iso_label, iso_badge, iso_color = get_group_status(['mood_stress', 'sleep'])
+    iso_status, iso_label, iso_badge, iso_color = get_group_status(['mood', 'sleep'])
     env_status, env_label, env_badge, env_color = get_group_status(['cabin_co2', 'body_temp'])
 
     return [
@@ -463,7 +467,7 @@ def calculate_risk_vectors(metric_evals):
             'status': iso_status,
             'label': iso_label,
             'badge_class': iso_badge,
-            'indicators': 'Mood & stress, Sleep',
+            'indicators': 'Mood, Sleep',
             'is_caution': iso_status == 'caution',
         },
         {

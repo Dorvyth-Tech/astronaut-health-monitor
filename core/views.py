@@ -173,7 +173,7 @@ def dashboard_view(request):
             formatted_val = f"{int(round(latest_val)):,}"
         elif metric_key in ('resting_hr', 'hrv', 'exercise'):
             formatted_val = f"{int(round(latest_val))}"
-        elif metric_key == 'mood_stress':
+        elif metric_key == 'mood':
             formatted_val = f"{int(round(latest_val))}"
         else:
             formatted_val = f"{latest_val:.1f}"
@@ -199,7 +199,6 @@ def dashboard_view(request):
             'is_no_data': eval_dict['status'] == 'no_data',
             'reason': eval_dict['reason'],
             'baseline': baseline_val,
-            'mood_val': 4 if metric_key == 'mood_stress' else None,  # for mood/stress dual display
         })
 
     # Overall Health Score calculation
@@ -330,9 +329,9 @@ def profile_view(request):
             'rationale': 'Core thermal balance baseline for monitoring spaceflight circadian disruption and infection.',
             'reference': '36.4 — 37.2 °C',
         },
-        'mood_stress': {
-            'rationale': 'Subjective cognitive stress rating (1-10); lower scores represent optimal psychological reserve.',
-            'reference': '1 — 4 /10',
+        'mood': {
+            'rationale': 'Daily self-reported mood (1-5). The rule watches for drops below your own baseline.',
+            'reference': '1 (lowest) — 5 (highest)',
         },
         'cabin_co2': {
             'rationale': 'Atmospheric life support setpoint for closed habitat environmental control loop.',

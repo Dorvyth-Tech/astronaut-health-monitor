@@ -8,9 +8,13 @@ METRICS = [
     'sleep',
     'exercise',
     'body_temp',
-    'mood_stress',
+    'mood',
     'cabin_co2',
 ]
+
+# Exercise plan from the Science Lead table: 150 minutes of resistance exercise
+# per week. The exercise rule compares each completed week against this number.
+EXERCISE_WEEKLY_PLAN_MINUTES = 150
 
 METRIC_CHOICES = [
     ('resting_hr', 'Resting Heart Rate'),
@@ -18,7 +22,8 @@ METRIC_CHOICES = [
     ('sleep', 'Sleep Duration'),
     ('exercise', 'Exercise Duration'),
     ('body_temp', 'Body Temperature'),
-    ('mood_stress', 'Mood & Stress'),
+    ('mood', 'Mood'),
+    ('mood_stress', 'Stress (self-report)'),
     ('cabin_co2', 'Cabin CO2 Concentration'),
 ]
 
@@ -67,11 +72,21 @@ METRIC_CONFIG = {
         'icon': 'thermostat',
         'step': 0.1,
     },
-    'mood_stress': {
-        'label': 'Mood & Stress',
-        'unit': '/10',
-        'default_baseline': 3.0,  # stress level (1-10)
+    # Mood is one of the 7 scored indicators: the daily 1-5 score from the check-in.
+    'mood': {
+        'label': 'Mood',
+        'unit': '/5',
+        'default_baseline': 4.0,
         'icon': 'sentiment_satisfied',
+        'step': 0.1,
+    },
+    # Stress (1-10) is NOT one of the 7 indicators (it has no science rule). It is
+    # kept as a self-report reading for the ground-support page and history.
+    'mood_stress': {
+        'label': 'Stress',
+        'unit': '/10',
+        'default_baseline': 3.0,
+        'icon': 'psychology',
         'step': 1,
     },
     'cabin_co2': {

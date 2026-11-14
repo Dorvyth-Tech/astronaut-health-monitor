@@ -20,7 +20,7 @@ from core import rules
 from core.constants import METRICS
 from core.models import AstronautProfile, Baseline
 from core.services import calculate_health_score, evaluate_astronaut_metrics
-from telemetry.models import Reading
+from telemetry.models import CheckIn, Reading
 
 
 class SleepDeclineScenarioTests(TestCase):
@@ -33,8 +33,6 @@ class SleepDeclineScenarioTests(TestCase):
     def test_baselines_come_from_days_1_to_14_for_every_indicator(self):
         for astro in AstronautProfile.objects.all():
             for metric in METRICS:
-                if metric == 'mood_stress':      # display-only, keeps its template value
-                    continue
                 early = list(Reading.objects.filter(astronaut=astro, metric=metric, mission_day__lte=14)
                              .values_list('mission_day', 'value'))
                 self.assertEqual(len(early), 14, f"{astro.name}/{metric}: all 14 days must exist")
@@ -63,9 +61,23 @@ class SleepDeclineScenarioTests(TestCase):
         self.assertEqual(hourly.count(), 48)
 
     def test_the_other_indicators_are_green_and_stress_is_display_only(self):
-        for metric in ('resting_hr', 'hrv', 'exercise', 'body_temp'):
+        for metric in ('resting_hr', 'hrv', 'exercise', 'body_temp', 'mood'):
             self.assertEqual(self.evals[metric]['status'], 'nominal', self.evals[metric]['reason'])
         self.assertEqual(self.evals['mood_stress']['status'], 'no_data')
+
+    def test_mood_comes_from_the_daily_checkin_score(self):
+        # the seed writes CheckIn.mood and the matching 'mood' Reading (1-5 scale)
+        mood = self.evals['mood']
+        self.assertEqual(mood['rule_status'], rules.GREEN)
+        checkin = CheckIn.objects.get(astronaut=self.cmdr, mission_day=142)
+        self.assertEqual(mood['value'], float(checkin.mood))
+        self.assertTrue(1 <= mood['value'] <= 5)
+
+    def test_every_other_crew_member_scores_100_with_no_alerts(self):
+        for astro in AstronautProfile.objects.exclude(id=self.cmdr.id):
+            score = calculate_health_score(evaluate_astronaut_metrics(astro))
+            self.assertEqual(score['score'], 100, astro.name)
+            self.assertFalse(Alert.objects.filter(astronaut=astro, acknowledged=False).exists(), astro.name)
 
     def test_exactly_one_active_alert_and_it_comes_from_the_rules(self):
         active = list(Alert.objects.filter(acknowledged=False).values_list('astronaut__email', 'metric', 'severity'))
@@ -83,8 +95,8 @@ class SleepDeclineScenarioTests(TestCase):
 
     def test_health_score_is_a_number(self):
         score = calculate_health_score(self.evals)
-        # 5 green + 1 amber, CO2 now counts, stress is excluded: (500 + 60) / 6 = 93
-        self.assertEqual(score['score'], 93)
+        # 6 green + 1 amber (sleep), stress is excluded: (600 + 60) / 7 = 94
+        self.assertEqual(score['score'], 94)
         self.assertEqual(score['status'], 'nominal')
 
     def test_dashboard_and_history_pages_render_the_story(self):
