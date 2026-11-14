@@ -28,15 +28,14 @@ SEVERITY_CHOICES = [
     ('critical', 'Critical'),
 ]
 
-# Baseline defaults and thresholds per NASA HRP prototype requirements
+# Display metadata per metric (label, unit, icon, step) plus a DISPLAY-ONLY default
+# baseline. Status thresholds no longer live here: they are baseline-relative
+# rules in core/rules.py (Science Lead table).
 METRIC_CONFIG = {
     'resting_hr': {
         'label': 'Resting HR',
         'unit': 'bpm',
         'default_baseline': 58.0,
-        'caution_high': 75.0,
-        'critical_high': 95.0,
-        'caution_low': 45.0,
         'icon': 'monitor_heart',
         'step': 1,
     },
@@ -44,8 +43,6 @@ METRIC_CONFIG = {
         'label': 'HRV',
         'unit': 'ms',
         'default_baseline': 62.0,
-        'caution_low': 45.0,
-        'critical_low': 35.0,
         'icon': 'ecg',
         'step': 1,
     },
@@ -53,8 +50,6 @@ METRIC_CONFIG = {
         'label': 'Sleep',
         'unit': 'h',
         'default_baseline': 7.2,
-        'caution_low': 6.0,
-        'critical_low': 4.5,
         'icon': 'bedtime',
         'step': 0.1,
     },
@@ -62,8 +57,6 @@ METRIC_CONFIG = {
         'label': 'Exercise',
         'unit': 'min/d',
         'default_baseline': 60.0,
-        'caution_low': 40.0,
-        'critical_low': 20.0,
         'icon': 'fitness_center',
         'step': 1,
     },
@@ -71,10 +64,6 @@ METRIC_CONFIG = {
         'label': 'Body Temp',
         'unit': '°C',
         'default_baseline': 36.7,
-        'caution_low': 36.0,
-        'caution_high': 37.5,
-        'critical_high': 38.5,
-        'critical_low': 35.0,
         'icon': 'thermostat',
         'step': 0.1,
     },
@@ -82,8 +71,6 @@ METRIC_CONFIG = {
         'label': 'Mood & Stress',
         'unit': '/10',
         'default_baseline': 3.0,  # stress level (1-10)
-        'caution_high': 6.0,
-        'critical_high': 8.0,
         'icon': 'sentiment_satisfied',
         'step': 1,
     },
@@ -91,8 +78,6 @@ METRIC_CONFIG = {
         'label': 'Cabin CO2',
         'unit': 'ppm',
         'default_baseline': 2450.0,
-        'caution_high': 3000.0,
-        'critical_high': 5000.0,
         'icon': 'air',
         'step': 25,
     },
