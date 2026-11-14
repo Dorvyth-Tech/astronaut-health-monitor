@@ -1,0 +1,26 @@
+{
+  "name": "astronaut-health-monitor",
+  "version": "1.0.0",
+  "description": "**Deep-Space Astronaut Health Monitoring Web App** *NASA Space Apps Challenge 2026 — Challenge: Health Monitoring Software for Astronauts on Space Missions*",
+  "main": "index.js",
+  "scripts": {
+    "build:css": "tailwindcss -i app/static/app/src/input.css -o app/static/app/css/output.css",
+    "watch:css": "tailwindcss -i app/static/app/src/input.css -o app/static/app/css/output.css --watch"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/emmanuelangelo4199/astronaut-health-monitor.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/emmanuelangelo4199/astronaut-health-monitor/issues"
+  },
+  "homepage": "https://github.com/emmanuelangelo4199/astronaut-health-monitor#readme",
+  "dependencies": {
+    "@tailwindcss/cli": "^4.3.5",
+    "tailwindcss": "^4.3.5"
+  }
+}

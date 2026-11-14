@@ -1,0 +1,657 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Ground Support Link | Space-Pulse{% endblock %}
+
+{% block content %}
+<div class="flex flex-col w-full">
+
+  <!-- Top Command Telemetry Scrim & Status Header Strip -->
+  <div class="w-full bg-surface-container-low/95 backdrop-blur-xl px-gutter md:px-margin-desktop py-space-md shadow-xl relative overflow-hidden border-b border-white/5">
+    <!-- Subtle Coordinate & Signal Background Grid Motif -->
+    <div class="absolute inset-0 pointer-events-none opacity-10 flex justify-between items-center px-4">
+      <div class="h-full w-px bg-primary"></div>
+      <div class="h-full w-px bg-primary"></div>
+      <div class="h-full w-px bg-primary"></div>
+      <div class="h-full w-px bg-primary"></div>
+    </div>
+
+    <div class="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-space-md">
+      <!-- Telemetry Meta Info -->
+      <div class="flex flex-col gap-space-xs">
+        <div class="flex flex-wrap items-center gap-space-sm">
+          <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-container-highest text-on-surface-variant font-label-caps text-label-caps uppercase tracking-wider">
+            <span class="w-1.5 h-1.5 rounded-full bg-outline"></span>
+            Read-only Telemetry
+          </span>
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-surface-container-high text-primary-fixed font-label-caps text-label-caps tracking-wider uppercase border border-white/5">
+            <span class="material-symbols-outlined text-[13px] text-primary-fixed">encrypted</span>
+            JSC-MED Crypt-Channel 04
+          </span>
+        </div>
+        <p class="font-body-md text-body-md text-on-surface flex flex-wrap items-center gap-x-2 gap-y-1">
+          <span class="font-headline-sm text-headline-sm text-primary">Read-only view</span>
+          <span class="text-outline">•</span>
+          <span>Shared by <strong class="text-primary-fixed font-headline-sm text-headline-sm">{{ current_astronaut.full_title|default:"Cmdr. Amara Reyes" }}</strong></span>
+          <span class="text-outline">•</span>
+          <span class="text-on-surface-variant">Updated Day {{ current_astronaut.current_mission_day|default:142 }} · 07:45 UTC</span>
+        </p>
+        <div class="flex items-center gap-space-xs text-on-surface-variant font-label-sm text-label-sm">
+          <span class="material-symbols-outlined text-[14px] text-primary animate-pulse">satellite_alt</span>
+          <span>Telemetry stream: Mars Hab-1 → Houston JSC Ground Link <span class="text-primary-fixed-dim font-headline-sm text-label-sm">(Delayed by {{ comm_latency|default:"18m 42s" }})</span></span>
+        </div>
+      </div>
+
+      <!-- Action Buttons & Export Controls -->
+      <div class="flex flex-wrap items-center gap-space-sm" id="export-controls-bar">
+        <!-- New Uplink Message Trigger -->
+        <button onclick="document.getElementById('uplink-modal').classList.remove('hidden')"
+                class="h-11 px-4 rounded-xl bg-surface-container-high hover:bg-surface-container-highest text-primary font-headline-sm text-headline-sm transition-all flex items-center gap-space-xs border border-white/5">
+          <span class="material-symbols-outlined text-[18px]">outgoing_mail</span>
+          <span>Transmit Uplink</span>
+        </button>
+
+        <!-- Secondary CSV Export -->
+        <button class="h-11 px-4 rounded-xl bg-surface-container-highest/60 hover:bg-surface-container-high text-primary hover:text-white transition-all flex items-center gap-space-xs font-headline-sm text-headline-sm active:scale-95 shadow-sm border border-white/5" id="btn-export-csv">
+          <span class="material-symbols-outlined text-[20px]">table_view</span>
+          <span>Export CSV</span>
+        </button>
+
+        <!-- Primary PDF Export -->
+        <button class="h-11 px-5 rounded-xl bg-gradient-to-r from-primary-container via-primary-fixed to-secondary-container text-on-primary-fixed hover:opacity-95 font-headline-sm text-headline-sm tracking-wide shadow-[0_0_20px_rgba(0,240,255,0.3)] transition-all flex items-center gap-space-xs active:scale-95 group" id="btn-export-pdf">
+          <span class="material-symbols-outlined text-[20px] transition-transform group-hover:-translate-y-0.5" id="pdf-icon">download</span>
+          <span class="material-symbols-outlined text-[20px] animate-spin hidden" id="pdf-spinner">progress_activity</span>
+          <span id="pdf-btn-label">Export PDF</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Notification Toast for Simulated Downloads -->
+  <div class="hidden fixed bottom-6 right-6 z-50 px-space-md py-space-sm rounded-xl bg-surface-container-high text-on-surface shadow-2xl flex items-center gap-space-sm transition-all duration-300 transform translate-y-4 border border-white/10" id="toast-banner">
+    <div class="w-8 h-8 rounded-lg bg-surface-container-highest flex items-center justify-center text-primary-container">
+      <span class="material-symbols-outlined text-[18px]">verified</span>
+    </div>
+    <div class="flex flex-col">
+      <span class="font-headline-sm text-headline-sm text-primary" id="toast-title">Telemetry Pack Ready</span>
+      <span class="font-body-sm text-body-sm text-on-surface-variant" id="toast-msg">JSC-MED payload compiled for Day 142.</span>
+    </div>
+  </div>
+
+  {% if success_message %}
+  <div class="w-full max-w-7xl mx-auto px-gutter md:px-margin-desktop pt-space-md">
+    <div class="p-space-md rounded-xl bg-nominal/15 border border-nominal/40 text-nominal flex items-center justify-between shadow-[0_0_15px_rgba(34,227,160,0.15)] animate-fade-in">
+      <div class="flex items-center gap-space-sm">
+        <span class="material-symbols-outlined text-[22px]">satellite_alt</span>
+        <span class="font-headline-sm text-sm font-semibold">{{ success_message }}</span>
+      </div>
+      <span class="text-xs font-mono text-nominal/80">DSN UPLINK LOGGED</span>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Main Scrollable Dashboard Content -->
+  <div class="w-full px-gutter md:px-margin-desktop py-space-lg flex flex-col gap-space-xl max-w-7xl mx-auto">
+
+    <!-- Overall Crew Health Status Summary Card -->
+    <div class="w-full rounded-xl bg-surface-container-low/90 backdrop-blur-md p-space-md md:p-space-lg shadow-xl relative overflow-hidden border border-white/5">
+      <!-- Background Ambient Glow -->
+      <div class="absolute -right-20 -bottom-20 w-80 h-80 bg-primary-container/5 rounded-full blur-3xl pointer-events-none"></div>
+
+      <div class="flex flex-col lg:flex-row items-center justify-between gap-space-lg relative z-10">
+        <!-- Left: 160px SVG HealthScoreRing -->
+        <div class="flex items-center gap-space-md shrink-0">
+          <div class="relative w-40 h-40 flex items-center justify-center">
+            <svg class="w-full h-full transform -rotate-90" viewBox="0 0 160 160">
+              <!-- Background Outer Track -->
+              <circle class="text-surface-container-highest/60" cx="80" cy="80" fill="none" r="68" stroke="currentColor" stroke-width="8"></circle>
+              <!-- Target Baseline Arc Marker (75%) -->
+              <circle class="text-outline/40" cx="80" cy="80" fill="none" r="68" stroke="currentColor" stroke-dasharray="3 6" stroke-width="2"></circle>
+              <!-- Primary Arc: 82% -->
+              <circle class="text-primary-fixed-dim" cx="80" cy="80" fill="none" r="68" stroke="currentColor" stroke-dasharray="{{ health_circumference|default:427.25 }}" stroke-dashoffset="{{ health_dashoffset|default:76.9 }}" stroke-linecap="round" stroke-width="9" style="filter: drop-shadow(0 0 8px rgba(0, 219, 233, 0.4));"></circle>
+            </svg>
+            <div class="absolute inset-0 flex flex-col items-center justify-center text-center">
+              <span class="font-label-caps text-[10px] tracking-widest text-outline uppercase">INDEX</span>
+              <span class="font-display-hero text-headline-lg text-primary tracking-tight font-bold">{{ health_score|default:82 }}</span>
+              <span class="font-label-caps text-label-caps text-on-surface-variant font-semibold">/ 100</span>
+            </div>
+          </div>
+          <div class="hidden sm:flex flex-col gap-1">
+            <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-container-highest text-primary-fixed font-label-caps text-label-caps uppercase border border-white/5">
+              <span class="w-2 h-2 rounded-full bg-primary-fixed animate-ping"></span>
+              Nominal Status
+            </div>
+            <span class="font-body-sm text-body-sm text-outline">Autonomous Score</span>
+            <span class="font-label-caps text-label-caps text-on-surface-variant">Target 78+</span>
+          </div>
+        </div>
+
+        <!-- Middle: Clinical Assessment Headline & Narrative -->
+        <div class="flex-1 flex flex-col gap-space-xs text-center lg:text-left">
+          <div class="flex items-center justify-center lg:justify-start gap-space-sm">
+            <span class="px-2.5 py-0.5 rounded-full bg-surface-container-high text-primary-fixed font-label-caps text-label-caps uppercase border border-white/5">
+              Physiological Condition: Stable
+            </span>
+            <span class="font-body-sm text-body-sm text-outline">Sol {{ current_astronaut.current_mission_day|default:142 }} Telemetry</span>
+          </div>
+          <h2 class="font-headline-md text-headline-md text-on-surface font-semibold tracking-wide">
+            Mostly nominal. Sleep has dropped four days in a row.
+          </h2>
+          <p class="font-body-md text-body-md text-on-surface-variant leading-relaxed">
+            Neuro-circadian monitoring active. Stress index ({{ stress_latest|default:3 }}/10) and resting HRV ({{ hrv_latest|default:62 }} ms) remain within mission baseline variance. Ground Medical Officer intervention recommended only if REM deficit extends beyond 48 hours.
+          </p>
+        </div>
+
+        <!-- Right: Surgeon Quick Telemetry Specs -->
+        <div class="w-full lg:w-72 bg-surface-container-lowest/80 rounded-xl p-space-md flex flex-col gap-space-sm shrink-0 border border-white/5">
+          <div class="flex items-center justify-between">
+            <span class="font-label-caps text-label-caps text-outline uppercase tracking-wider">Flight Surgeon</span>
+            <span class="w-2 h-2 rounded-full bg-primary-fixed"></span>
+          </div>
+          <div>
+            <div class="font-headline-sm text-headline-sm text-primary">{{ flight_surgeon_name|default:"Dr. Marcus Vance" }}</div>
+            <div class="font-body-sm text-body-sm text-on-surface-variant">{{ flight_surgeon_console|default:"Ground Console JSC-MED-1" }}</div>
+          </div>
+          <div class="pt-space-xs flex flex-col gap-1">
+            <div class="flex justify-between items-baseline">
+              <span class="font-body-sm text-body-sm text-outline">Physio Reserve</span>
+              <span class="font-headline-sm text-headline-sm text-primary-fixed font-bold">{{ physio_reserve|default:88.4 }}%</span>
+            </div>
+            <div class="w-full h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
+              <div class="h-full bg-primary-fixed rounded-full" style="width: {{ physio_reserve|default:88.4 }}%;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2x2 Grid of ChartCards (7-day trend visualizations for Flight Surgeon) -->
+    <div class="flex flex-col gap-space-md">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-space-sm">
+          <span class="material-symbols-outlined text-[20px] text-primary">monitoring</span>
+          <h3 class="font-headline-md text-headline-md text-on-surface tracking-wide">Biometric Vectors (7-Day Longitudinal)</h3>
+        </div>
+        <span class="font-label-caps text-label-caps text-outline uppercase">Auton-Telemetry Sync • 100 Hz Sampled</span>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-space-md">
+
+        <!-- Card 1: Sleep Duration (Amber Alert Highlighted) -->
+        <div class="rounded-xl bg-surface-container-low/85 backdrop-blur-md p-space-md flex flex-col justify-between shadow-lg relative group overflow-hidden border border-white/5">
+          <div class="flex items-start justify-between">
+            <div>
+              <div class="flex items-center gap-space-xs">
+                <span class="font-label-caps text-label-caps text-outline uppercase tracking-wider">Circadian Pattern</span>
+                <span class="px-2 py-0.5 rounded-full bg-surface-container-highest text-error font-label-caps text-[10px] uppercase font-semibold">Declining Trend</span>
+              </div>
+              <h4 class="font-headline-sm text-headline-sm text-primary mt-1">Sleep Duration (7 Days)</h4>
+            </div>
+            <div class="text-right">
+              <span class="font-telemetry-metric text-telemetry-metric text-error font-bold">{{ sleep_latest|default:"5.8" }}<span class="font-body-sm text-body-sm text-on-surface-variant font-normal"> h</span></span>
+              <div class="font-label-sm text-label-sm text-outline">Baseline: {{ sleep_base|default:"7.2" }} h</div>
+            </div>
+          </div>
+
+          <!-- SVG Chart for Sleep Duration -->
+          <div class="my-space-md relative w-full h-36 flex flex-col justify-end">
+            <!-- Amber Threshold line indicator at 6.0h -->
+            <div class="absolute inset-x-0 top-1/2 flex items-center justify-between pointer-events-none opacity-40">
+              <div class="w-full h-px bg-error stroke-dashed"></div>
+              <span class="text-[9px] font-label-caps text-error bg-surface-container-low px-1">ALERT THRESHOLD (6.0h)</span>
+            </div>
+            <svg class="w-full h-28 overflow-visible" preserveAspectRatio="none" viewBox="0 0 350 90">
+              <defs>
+                <linearGradient id="sleepGrad" x1="0" x2="0" y1="0" y2="1">
+                  <stop offset="0%" stop-color="#ffb4ab" stop-opacity="0.3"></stop>
+                  <stop offset="100%" stop-color="#ffb4ab" stop-opacity="0.0"></stop>
+                </linearGradient>
+              </defs>
+              <!-- Baseline 7.2h Guide Line -->
+              <line class="text-outline/30" stroke="currentColor" stroke-dasharray="4 4" stroke-width="1.5" x1="0" x2="350" y1="20" y2="20"></line>
+              <!-- Shaded fill under curve -->
+              <path d="M 0,20 L 58,16 L 116,22 L 175,18 L 233,28 L 291,52 L 350,75 L 350,90 L 0,90 Z" fill="url(#sleepGrad)"></path>
+              <!-- Line Track -->
+              <path d="M 0,20 L 58,16 L 116,22 L 175,18 L 233,28 L 291,52 L 350,75" fill="none" stroke="#ffb4ab" stroke-linecap="round" stroke-width="3"></path>
+              <!-- Data Points with hover effect -->
+              <circle cx="0" cy="20" fill="#00dbe9" r="4"></circle>
+              <circle cx="58" cy="16" fill="#00dbe9" r="4"></circle>
+              <circle cx="116" cy="22" fill="#00dbe9" r="4"></circle>
+              <circle cx="175" cy="18" fill="#00dbe9" r="4"></circle>
+              <circle cx="233" cy="28" fill="#00dbe9" r="4"></circle>
+              <circle cx="291" cy="52" fill="#ffb4ab" r="5"></circle>
+              <circle class="animate-pulse" cx="350" cy="75" fill="#ffb4ab" r="6"></circle>
+            </svg>
+            <div class="flex justify-between text-outline font-label-caps text-[10px] mt-2 pt-1">
+              <span>Day 136 (7.2h)</span>
+              <span>138 (7.1h)</span>
+              <span>140 (6.9h)</span>
+              <span>141 (6.3h)</span>
+              <span class="text-error font-bold">Day 142 (5.8h)</span>
+            </div>
+          </div>
+
+          <div class="p-space-xs rounded-lg bg-surface-container-highest/60 flex items-center justify-between text-on-surface-variant font-body-sm text-body-sm">
+            <span class="flex items-center gap-1 text-error">
+              <span class="material-symbols-outlined text-[16px]">warning</span>
+              4-day negative deviation ({{ sleep_delta|default:"-1.4" }}h)
+            </span>
+            <span class="font-label-caps text-[11px] text-outline">Threshold: &lt;6.0h</span>
+          </div>
+        </div>
+
+        <!-- Card 2: Heart Rate Variability (HRV - 7 Days) -->
+        <div class="rounded-xl bg-surface-container-low/85 backdrop-blur-md p-space-md flex flex-col justify-between shadow-lg relative group overflow-hidden border border-white/5">
+          <div class="flex items-start justify-between">
+            <div>
+              <div class="flex items-center gap-space-xs">
+                <span class="font-label-caps text-label-caps text-outline uppercase tracking-wider">Autonomic Tone</span>
+                <span class="px-2 py-0.5 rounded-full bg-surface-container-highest text-primary-fixed font-label-caps text-[10px] uppercase font-semibold">Nominal</span>
+              </div>
+              <h4 class="font-headline-sm text-headline-sm text-primary mt-1">HRV (rMSSD - 7 Days)</h4>
+            </div>
+            <div class="text-right">
+              <span class="font-telemetry-metric text-telemetry-metric text-primary-fixed font-bold">{{ hrv_latest|default:62 }}<span class="font-body-sm text-body-sm text-on-surface-variant font-normal"> ms</span></span>
+              <div class="font-label-sm text-label-sm text-outline">Baseline: {{ hrv_base|default:66 }} ms</div>
+            </div>
+          </div>
+
+          <!-- SVG Chart for HRV -->
+          <div class="my-space-md relative w-full h-36 flex flex-col justify-end">
+            <svg class="w-full h-28 overflow-visible" preserveAspectRatio="none" viewBox="0 0 350 90">
+              <defs>
+                <linearGradient id="hrvGrad" x1="0" x2="0" y1="0" y2="1">
+                  <stop offset="0%" stop-color="#00f0ff" stop-opacity="0.25"></stop>
+                  <stop offset="100%" stop-color="#00f0ff" stop-opacity="0.0"></stop>
+                </linearGradient>
+              </defs>
+              <!-- Baseline 66ms Line -->
+              <line class="text-outline/30" stroke="currentColor" stroke-dasharray="4 4" stroke-width="1.5" x1="0" x2="350" y1="28" y2="28"></line>
+              <path d="M 0,22 L 58,35 L 116,28 L 175,42 L 233,48 L 291,48 L 350,56 L 350,90 L 0,90 Z" fill="url(#hrvGrad)"></path>
+              <path d="M 0,22 L 58,35 L 116,28 L 175,42 L 233,48 L 291,48 L 350,56" fill="none" stroke="#00f0ff" stroke-linecap="round" stroke-width="2.5"></path>
+              <circle cx="0" cy="22" fill="#00f0ff" r="3.5"></circle>
+              <circle cx="58" cy="35" fill="#00f0ff" r="3.5"></circle>
+              <circle cx="116" cy="28" fill="#00f0ff" r="3.5"></circle>
+              <circle cx="175" cy="42" fill="#00f0ff" r="3.5"></circle>
+              <circle cx="233" cy="48" fill="#00f0ff" r="3.5"></circle>
+              <circle cx="291" cy="48" fill="#00f0ff" r="3.5"></circle>
+              <circle cx="350" cy="56" fill="#00f0ff" r="4.5"></circle>
+            </svg>
+            <div class="flex justify-between text-outline font-label-caps text-[10px] mt-2 pt-1">
+              <span>Day 136 (67ms)</span>
+              <span>138 (66ms)</span>
+              <span>140 (63ms)</span>
+              <span class="text-primary-fixed">Day 142 (62ms)</span>
+            </div>
+          </div>
+
+          <div class="p-space-xs rounded-lg bg-surface-container-highest/60 flex items-center justify-between text-on-surface-variant font-body-sm text-body-sm">
+            <span class="flex items-center gap-1 text-primary-fixed">
+              <span class="material-symbols-outlined text-[16px]">check_circle</span>
+              Parasympathetic tone stable
+            </span>
+            <span class="font-label-caps text-[11px] text-outline">Ref Range: 55-80 ms</span>
+          </div>
+        </div>
+
+        <!-- Card 3: Resting Heart Rate (7 Days) -->
+        <div class="rounded-xl bg-surface-container-low/85 backdrop-blur-md p-space-md flex flex-col justify-between shadow-lg relative group overflow-hidden border border-white/5">
+          <div class="flex items-start justify-between">
+            <div>
+              <div class="flex items-center gap-space-xs">
+                <span class="font-label-caps text-label-caps text-outline uppercase tracking-wider">Cardiovascular</span>
+                <span class="px-2 py-0.5 rounded-full bg-surface-container-highest text-primary-fixed font-label-caps text-[10px] uppercase font-semibold">Optimal</span>
+              </div>
+              <h4 class="font-headline-sm text-headline-sm text-primary mt-1">Resting Heart Rate (7 Days)</h4>
+            </div>
+            <div class="text-right">
+              <span class="font-telemetry-metric text-telemetry-metric text-primary-fixed font-bold">{{ rhr_latest|default:58 }}<span class="font-body-sm text-body-sm text-on-surface-variant font-normal"> bpm</span></span>
+              <div class="font-label-sm text-label-sm text-outline">Baseline: {{ rhr_base|default:56 }} bpm</div>
+            </div>
+          </div>
+
+          <!-- SVG Chart for Resting Heart Rate -->
+          <div class="my-space-md relative w-full h-36 flex flex-col justify-end">
+            <svg class="w-full h-28 overflow-visible" preserveAspectRatio="none" viewBox="0 0 350 90">
+              <defs>
+                <linearGradient id="rhrGrad" x1="0" x2="0" y1="0" y2="1">
+                  <stop offset="0%" stop-color="#00dbe9" stop-opacity="0.2"></stop>
+                  <stop offset="100%" stop-color="#00dbe9" stop-opacity="0.0"></stop>
+                </linearGradient>
+              </defs>
+              <!-- Baseline 56 bpm Line -->
+              <line class="text-outline/30" stroke="currentColor" stroke-dasharray="4 4" stroke-width="1.5" x1="0" x2="350" y1="65" y2="65"></line>
+              <path d="M 0,65 L 58,50 L 116,65 L 175,50 L 233,35 L 291,50 L 350,35 L 350,90 L 0,90 Z" fill="url(#rhrGrad)"></path>
+              <path d="M 0,65 L 58,50 L 116,65 L 175,50 L 233,35 L 291,50 L 350,35" fill="none" stroke="#00dbe9" stroke-linecap="round" stroke-width="2.5"></path>
+              <circle cx="0" cy="65" fill="#00dbe9" r="3.5"></circle>
+              <circle cx="58" cy="50" fill="#00dbe9" r="3.5"></circle>
+              <circle cx="116" cy="65" fill="#00dbe9" r="3.5"></circle>
+              <circle cx="175" cy="50" fill="#00dbe9" r="3.5"></circle>
+              <circle cx="233" cy="35" fill="#00dbe9" r="3.5"></circle>
+              <circle cx="291" cy="50" fill="#00dbe9" r="3.5"></circle>
+              <circle cx="350" cy="35" fill="#00dbe9" r="4.5"></circle>
+            </svg>
+            <div class="flex justify-between text-outline font-label-caps text-[10px] mt-2 pt-1">
+              <span>Day 136 (56)</span>
+              <span>138 (56)</span>
+              <span>140 (58)</span>
+              <span class="text-primary-fixed">Day 142 (58 bpm)</span>
+            </div>
+          </div>
+
+          <div class="p-space-xs rounded-lg bg-surface-container-highest/60 flex items-center justify-between text-on-surface-variant font-body-sm text-body-sm">
+            <span class="flex items-center gap-1 text-primary-fixed">
+              <span class="material-symbols-outlined text-[16px]">favorite</span>
+              Zero-G cardiovascular tone nominal
+            </span>
+            <span class="font-label-caps text-[11px] text-outline">Target: 50-65 bpm</span>
+          </div>
+        </div>
+
+        <!-- Card 4: Neuro-Stress Score (7 Days) -->
+        <div class="rounded-xl bg-surface-container-low/85 backdrop-blur-md p-space-md flex flex-col justify-between shadow-lg relative group overflow-hidden border border-white/5">
+          <div class="flex items-start justify-between">
+            <div>
+              <div class="flex items-center gap-space-xs">
+                <span class="font-label-caps text-label-caps text-outline uppercase tracking-wider">Cognitive Load</span>
+                <span class="px-2 py-0.5 rounded-full bg-surface-container-highest text-primary-fixed font-label-caps text-[10px] uppercase font-semibold">Low Burden</span>
+              </div>
+              <h4 class="font-headline-sm text-headline-sm text-primary mt-1">Neuro-Stress Score (7 Days)</h4>
+            </div>
+            <div class="text-right">
+              <span class="font-telemetry-metric text-telemetry-metric text-primary-fixed font-bold">{{ stress_latest|default:3 }}<span class="font-body-sm text-body-sm text-on-surface-variant font-normal"> / 10</span></span>
+              <div class="font-label-sm text-label-sm text-outline">Baseline: {{ stress_base|default:3 }} / 10</div>
+            </div>
+          </div>
+
+          <!-- SVG Chart for Stress Score -->
+          <div class="my-space-md relative w-full h-36 flex flex-col justify-end">
+            <svg class="w-full h-28 overflow-visible" preserveAspectRatio="none" viewBox="0 0 350 90">
+              <defs>
+                <linearGradient id="stressGrad" x1="0" x2="0" y1="0" y2="1">
+                  <stop offset="0%" stop-color="#d0bcff" stop-opacity="0.25"></stop>
+                  <stop offset="100%" stop-color="#d0bcff" stop-opacity="0.0"></stop>
+                </linearGradient>
+              </defs>
+              <!-- Baseline 3/10 Line -->
+              <line class="text-outline/30" stroke="currentColor" stroke-dasharray="4 4" stroke-width="1.5" x1="0" x2="350" y1="60" y2="60"></line>
+              <path d="M 0,60 L 58,60 L 116,40 L 175,60 L 233,40 L 291,60 L 350,60 L 350,90 L 0,90 Z" fill="url(#stressGrad)"></path>
+              <path d="M 0,60 L 58,60 L 116,40 L 175,60 L 233,40 L 291,60 L 350,60" fill="none" stroke="#d0bcff" stroke-linecap="round" stroke-width="2.5"></path>
+              <circle cx="0" cy="60" fill="#d0bcff" r="3.5"></circle>
+              <circle cx="58" cy="60" fill="#d0bcff" r="3.5"></circle>
+              <circle cx="116" cy="40" fill="#d0bcff" r="3.5"></circle>
+              <circle cx="175" cy="60" fill="#d0bcff" r="3.5"></circle>
+              <circle cx="233" cy="40" fill="#d0bcff" r="3.5"></circle>
+              <circle cx="291" cy="60" fill="#d0bcff" r="3.5"></circle>
+              <circle cx="350" cy="60" fill="#d0bcff" r="4.5"></circle>
+            </svg>
+            <div class="flex justify-between text-outline font-label-caps text-[10px] mt-2 pt-1">
+              <span>Day 136 (3/10)</span>
+              <span>138 (4/10)</span>
+              <span>140 (4/10)</span>
+              <span class="text-secondary font-bold">Day 142 (3/10)</span>
+            </div>
+          </div>
+
+          <div class="p-space-xs rounded-lg bg-surface-container-highest/60 flex items-center justify-between text-on-surface-variant font-body-sm text-body-sm">
+            <span class="flex items-center gap-1 text-secondary">
+              <span class="material-symbols-outlined text-[16px]">psychology</span>
+              No operational cognitive strain
+            </span>
+            <span class="font-label-caps text-[11px] text-outline">Nominal Zone: 1 - 5</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Recent Signals & Autonomous Alerts Section -->
+    <div class="flex flex-col gap-space-md">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-space-sm">
+          <span class="material-symbols-outlined text-[20px] text-primary">warning</span>
+          <h3 class="font-headline-md text-headline-md text-on-surface tracking-wide">Recent Signals &amp; Autonomous Alerts</h3>
+        </div>
+        <span class="font-label-caps text-label-caps text-outline uppercase">Autonomous Diagnostic Engine v4.2</span>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-space-md">
+        <!-- Alert 1: Sleep Trending Down (Amber Alert) -->
+        <div class="rounded-xl bg-surface-container-low/90 backdrop-blur-md p-space-md shadow-lg flex flex-col justify-between gap-space-sm relative overflow-hidden border border-white/5">
+          <div class="absolute left-0 top-0 bottom-0 w-1 bg-error"></div>
+          <div class="flex items-start justify-between gap-space-sm">
+            <div class="flex items-center gap-space-xs">
+              <span class="px-2 py-0.5 rounded-full bg-surface-container-highest text-error font-label-caps text-label-caps uppercase flex items-center gap-1">
+                <span class="w-1.5 h-1.5 rounded-full bg-error animate-ping"></span>
+                Caution Notice
+              </span>
+              <span class="font-body-sm text-body-sm text-outline">Autonomous ID #AL-892</span>
+            </div>
+            <span class="font-label-caps text-label-caps text-on-surface-variant">Day 142 · 07:45 UTC</span>
+          </div>
+          <div>
+            <h4 class="font-headline-sm text-headline-sm text-primary">Sleep is trending down</h4>
+            <p class="font-body-md text-body-md text-on-surface-variant mt-1 leading-relaxed">
+              {{ sleep_latest }} h today, down from 7.3 h four days ago. Baseline {{ sleep_base }} h. 
+              <span class="text-on-surface block mt-1"><strong class="text-primary-fixed">Autonomous Countermeasure:</strong> Cabin circadian lighting shifted to dusk spectrum; Melatonin 0.5mg protocol advised prior to Sol 143 rest cycle.</span>
+            </p>
+          </div>
+          <div class="pt-space-xs flex items-center justify-between font-label-sm text-label-sm text-outline">
+            <span>Flight Surgeon Verification: Pending</span>
+            <span class="text-primary">View-only stream</span>
+          </div>
+        </div>
+
+        <!-- Alert 2: Cabin CO2 Steady (Nominal Info) -->
+        <div class="rounded-xl bg-surface-container-low/90 backdrop-blur-md p-space-md shadow-lg flex flex-col justify-between gap-space-sm relative overflow-hidden border border-white/5">
+          <div class="absolute left-0 top-0 bottom-0 w-1 bg-primary-fixed-dim"></div>
+          <div class="flex items-start justify-between gap-space-sm">
+            <div class="flex items-center gap-space-xs">
+              <span class="px-2 py-0.5 rounded-full bg-surface-container-highest text-primary-fixed-dim font-label-caps text-label-caps uppercase flex items-center gap-1">
+                <span class="w-1.5 h-1.5 rounded-full bg-primary-fixed-dim"></span>
+                Life Support Telemetry
+              </span>
+              <span class="font-body-sm text-body-sm text-outline">ECLSS Synced</span>
+            </div>
+            <span class="font-label-caps text-label-caps text-on-surface-variant">Day 142 · 06:30 UTC</span>
+          </div>
+          <div>
+            <h4 class="font-headline-sm text-headline-sm text-primary">Cabin CO2 steady</h4>
+            <p class="font-body-md text-body-md text-on-surface-variant mt-1 leading-relaxed">
+              {{ co2_latest|default:"2,450" }} ppm, within nominal deep-space parameters. Life support scrubber cycle active (Bed-B scrub operational). No secondary physiological impacts detected.
+            </p>
+          </div>
+          <div class="pt-space-xs flex items-center justify-between font-label-sm text-label-sm text-outline">
+            <span>ECLSS Houston Controller: Verified</span>
+            <span class="text-primary-fixed">Telemetry Nominal</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Astronaut Data Privacy Callout / Sharing State Toggle Information -->
+    <div class="w-full rounded-xl bg-surface-container/60 backdrop-blur-md p-space-md flex flex-col sm:flex-row items-center justify-between gap-space-md shadow-md border border-white/5">
+      <div class="flex items-center gap-space-md">
+        <div class="w-10 h-10 rounded-xl bg-surface-container-high flex items-center justify-center text-primary-container shrink-0">
+          <span class="material-symbols-outlined text-[22px]">privacy_tip</span>
+        </div>
+        <div class="flex flex-col">
+          <div class="flex items-center gap-space-xs">
+            <span class="font-headline-sm text-headline-sm text-on-surface">Data Sharing Active</span>
+            <span class="w-2 h-2 rounded-full bg-primary-container"></span>
+          </div>
+          <p class="font-body-sm text-body-sm text-on-surface-variant mt-0.5">
+            Turn off <em class="text-primary-fixed">Share summary with ground support</em> anytime in <a class="text-primary underline hover:text-primary-fixed" href="{% url 'core:profile' %}">Profile &amp; Baselines</a> to suspend ground console relay.
+          </p>
+        </div>
+      </div>
+      <!-- Quick Toggle Demo to simulate empty/privacy state -->
+      <button class="h-9 px-space-md rounded-lg bg-surface-container-highest text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high text-body-sm font-label-caps uppercase tracking-wider transition-colors shrink-0 border border-white/5" id="toggle-privacy-view">
+        Simulate Privacy Mode
+      </button>
+    </div>
+
+    <!-- Simulated Privacy Empty State (Hidden by Default) -->
+    <div class="hidden w-full rounded-xl bg-surface-container-low/95 p-space-xl flex flex-col items-center justify-center text-center shadow-2xl border border-white/5" id="privacy-empty-state">
+      <div class="w-16 h-16 rounded-full bg-surface-container-high flex items-center justify-center text-outline mb-space-md">
+        <span class="material-symbols-outlined text-[32px]">visibility_off</span>
+      </div>
+      <h3 class="font-headline-md text-headline-md text-on-surface">Ground Telemetry Sharing is Disabled</h3>
+      <p class="font-body-md text-body-md text-on-surface-variant max-w-md mt-space-xs mb-space-lg">
+        Astronaut {{ current_astronaut.full_title|default:"Cmdr. Amara Reyes" }} has restricted continuous ground sync. Turn on <strong class="text-primary">"Share summary with ground support"</strong> in Profile &amp; Baselines to resume transmission to JSC Mission Control.
+      </p>
+      <button class="h-10 px-5 rounded-xl bg-primary-container text-on-primary-container font-headline-sm text-headline-sm hover:opacity-90 transition-all flex items-center gap-2 shadow-[0_0_12px_rgba(0,240,255,0.25)]" id="btn-re-enable">
+        <span class="material-symbols-outlined text-[18px]">lock_open</span>
+        <span>Restore Ground Console Link</span>
+      </button>
+    </div>
+
+    <!-- Mission Control Signature Strip & Regulatory Disclaimer -->
+    <footer class="pt-space-md pb-space-lg flex flex-col md:flex-row items-center justify-between gap-space-md font-body-sm text-body-sm text-outline border-t border-white/5">
+      <div class="flex items-center gap-space-sm">
+        <span class="material-symbols-outlined text-[16px] text-primary">verified_user</span>
+        <span>JSC-BIO-SECURE ID #142-990-TX · Encrypted Uplink Protocol</span>
+      </div>
+      <div class="text-center md:text-right">
+        Prototype for demonstration purposes. Not a medical device.
+      </div>
+    </footer>
+
+  </div>
+
+  <!-- Uplink Composition Modal Dialog -->
+  <div id="uplink-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+    <div class="bg-surface-container-low border border-white/10 rounded-2xl max-w-lg w-full p-6 shadow-2xl flex flex-col gap-4">
+      <div class="flex items-center justify-between border-b border-white/10 pb-3">
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-primary-container text-[22px]">outgoing_mail</span>
+          <h3 class="font-headline-sm text-headline-sm text-primary">Transmit Uplink Packet</h3>
+        </div>
+        <button onclick="document.getElementById('uplink-modal').classList.add('hidden')" class="text-on-surface-variant hover:text-on-surface">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
+      <form method="POST" action="{% url 'core:ground_support' %}" class="flex flex-col gap-3">
+        {% csrf_token %}
+        <div>
+          <label class="block font-label-caps text-xs text-outline uppercase mb-1">Recipient Ground Console</label>
+          <select name="recipient" class="w-full bg-surface-container-lowest border border-white/10 rounded-xl px-3 py-2 text-sm text-on-surface">
+            <option value="Flight Surgeon (GND-SURG-2)">Flight Surgeon GND-SURG-2 (JSC Houston Medical)</option>
+            <option value="Houston CapCom (MCC-HOU)">Houston CapCom (Mission Control Center)</option>
+            <option value="ECLSS Environmental Systems">ECLSS Life Support Engineering Team</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block font-label-caps text-xs text-outline uppercase mb-1">Priority</label>
+          <select name="priority" class="w-full bg-surface-container-lowest border border-white/10 rounded-xl px-3 py-2 text-sm text-on-surface">
+            <option value="Routine">Routine</option>
+            <option value="Priority" selected>Priority</option>
+            <option value="Critical">Critical</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block font-label-caps text-xs text-outline uppercase mb-1">Subject</label>
+          <input type="text" name="subject" required placeholder="e.g. Flight Surgeon Sync: Sleep &amp; Circadian Status"
+                 class="w-full bg-surface-container-lowest border border-white/10 rounded-xl px-3 py-2 text-sm text-on-surface placeholder:text-outline">
+        </div>
+
+        <div>
+          <label class="block font-label-caps text-xs text-outline uppercase mb-1">Message Body</label>
+          <textarea name="body" rows="4" required placeholder="Enter telemetry observations or clinical report..."
+                    class="w-full bg-surface-container-lowest border border-white/10 rounded-xl p-3 text-sm text-on-surface placeholder:text-outline"></textarea>
+        </div>
+
+        <div class="flex items-center justify-end gap-2 pt-2 border-t border-white/10">
+          <button type="button" onclick="document.getElementById('uplink-modal').classList.add('hidden')"
+                  class="px-4 py-2 rounded-xl bg-surface-container-high text-on-surface text-sm font-semibold">
+            Cancel
+          </button>
+          <button type="submit"
+                  class="px-4 py-2 rounded-xl bg-primary-container text-on-primary-container font-headline-sm text-sm font-bold flex items-center gap-1.5 shadow-[0_0_12px_rgba(0,240,255,0.25)]">
+            <span class="material-symbols-outlined text-[16px]">send</span>
+            Transmit to Ground
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  (function initGroundSupport() {
+    const pdfBtn = document.getElementById('btn-export-pdf');
+    const csvBtn = document.getElementById('btn-export-csv');
+    const pdfIcon = document.getElementById('pdf-icon');
+    const pdfSpinner = document.getElementById('pdf-spinner');
+    const pdfBtnLabel = document.getElementById('pdf-btn-label');
+    const toast = document.getElementById('toast-banner');
+    const toastTitle = document.getElementById('toast-title');
+    const toastMsg = document.getElementById('toast-msg');
+
+    const privacyToggle = document.getElementById('toggle-privacy-view');
+    const privacyEmptyState = document.getElementById('privacy-empty-state');
+    const restoreBtn = document.getElementById('btn-re-enable');
+
+    function showToast(title, msg) {
+      if (!toast) return;
+      toastTitle.textContent = title;
+      toastMsg.textContent = msg;
+      toast.classList.remove('hidden');
+      toast.classList.remove('translate-y-4');
+      setTimeout(() => {
+        toast.classList.add('translate-y-4');
+        setTimeout(() => toast.classList.add('hidden'), 300);
+      }, 3200);
+    }
+
+    // Handle PDF Export click with loading state
+    if (pdfBtn) {
+      pdfBtn.addEventListener('click', () => {
+        pdfIcon.classList.add('hidden');
+        pdfSpinner.classList.remove('hidden');
+        pdfBtnLabel.textContent = 'Compiling...';
+        pdfBtn.disabled = true;
+
+        setTimeout(() => {
+          pdfIcon.classList.remove('hidden');
+          pdfSpinner.classList.add('hidden');
+          pdfBtnLabel.textContent = 'Export PDF';
+          pdfBtn.disabled = false;
+          showToast('PDF Report Generated', 'Cmdr_Reyes_Sol142_FlightSurgeon_Brief.pdf ready.');
+        }, 1400);
+      });
+    }
+
+    // Handle CSV Export
+    if (csvBtn) {
+      csvBtn.addEventListener('click', () => {
+        showToast('CSV Telemetry Package Ready', 'Raw biometric logs (Sol 136-142) formatted.');
+      });
+    }
+
+    // Toggle Privacy view for demonstration
+    if (privacyToggle && privacyEmptyState) {
+      privacyToggle.addEventListener('click', () => {
+        privacyEmptyState.classList.toggle('hidden');
+        privacyToggle.textContent = privacyEmptyState.classList.contains('hidden') 
+          ? 'Simulate Privacy Mode' 
+          : 'Exit Simulation';
+      });
+    }
+
+    if (restoreBtn && privacyEmptyState && privacyToggle) {
+      restoreBtn.addEventListener('click', () => {
+        privacyEmptyState.classList.add('hidden');
+        if (privacyToggle) privacyToggle.textContent = 'Simulate Privacy Mode';
+        showToast('Ground Link Active', 'Transmission restored to Houston JSC.');
+      });
+    }
+  })();
+</script>
+{% endblock %}

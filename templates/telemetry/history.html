@@ -1,0 +1,435 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Biometric Telemetry &amp; Audit History | Space-Pulse{% endblock %}
+
+{% block content %}
+<div class="flex flex-col w-full">
+  <div class="w-full px-gutter md:px-margin-desktop py-space-lg flex flex-col gap-space-lg max-w-[1600px] mx-auto">
+
+    <!-- Header Section -->
+    <div class="flex flex-col lg:flex-row lg:items-end justify-between gap-space-md">
+      <div class="flex flex-col gap-space-xs">
+        <div class="flex items-center gap-space-sm text-outline">
+          <a class="flex items-center gap-1 font-label-caps text-label-caps uppercase tracking-widest text-outline hover:text-primary transition-colors" href="{% url 'core:dashboard' %}">
+            <span class="material-symbols-outlined text-[16px]">arrow_back</span>
+            Back to Cockpit
+          </a>
+          <span class="text-surface-variant font-label-caps text-label-caps">/</span>
+          <span class="font-label-caps text-label-caps uppercase tracking-wider text-primary-fixed-dim">Telemetry Vault</span>
+        </div>
+        <h1 class="font-headline-lg text-headline-lg tracking-tight text-on-surface">Biometric Telemetry &amp; Audit History</h1>
+        <div class="flex flex-wrap items-center gap-space-sm font-label-caps text-label-caps uppercase tracking-widest text-on-surface-variant">
+          <span class="flex items-center gap-1.5 text-primary">
+            <span class="w-2 h-2 rounded-full bg-primary-container animate-pulse"></span>
+            Day {{ current_astronaut.current_mission_day|default:142 }}
+          </span>
+          <span class="text-outline">·</span>
+          <span>Flight Telemetry Log Archive</span>
+          <span class="text-outline">·</span>
+          <span class="text-secondary-fixed">{{ current_astronaut.habitat|default:"Transit Hab-1" }}</span>
+        </div>
+      </div>
+
+      <!-- Quick Metrics Strip -->
+      <div class="flex items-center gap-space-sm bg-surface-container-low/70 backdrop-blur-xl p-space-sm rounded-xl shadow-md border border-white/5">
+        <div class="px-space-md py-space-xs flex flex-col">
+          <span class="font-label-caps text-label-caps uppercase text-outline">Total Logs</span>
+          <span class="font-headline-sm text-headline-sm text-primary">{{ total_logs_count }}</span>
+        </div>
+        <div class="w-px h-8 bg-surface-container-high"></div>
+        <div class="px-space-md py-space-xs flex flex-col">
+          <span class="font-label-caps text-label-caps uppercase text-outline">Storage Parity</span>
+          <span class="font-headline-sm text-headline-sm text-on-surface">100% Sync</span>
+        </div>
+        <div class="w-px h-8 bg-surface-container-high"></div>
+        <div class="px-space-md py-space-xs flex flex-col">
+          <span class="font-label-caps text-label-caps uppercase text-outline">Anomalies (7D)</span>
+          <span class="font-headline-sm text-headline-sm text-error">{{ anomalies_7d_count }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Filter Bar Card -->
+    <form method="GET" action="{% url 'telemetry:history' %}" id="filter-form"
+          class="w-full bg-surface-container-low/75 backdrop-blur-xl rounded-xl p-space-md shadow-xl flex flex-col gap-space-md relative overflow-hidden border border-white/5">
+      <input type="hidden" name="view" id="input-view-mode" value="{{ active_view|default:'table' }}">
+
+      <!-- Glow ambient accent -->
+      <div class="absolute -right-20 -top-20 w-64 h-64 bg-primary-container/5 rounded-full blur-2xl pointer-events-none"></div>
+
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-space-xs">
+          <span class="material-symbols-outlined text-[18px] text-primary">tune</span>
+          <span class="font-label-caps text-label-caps uppercase tracking-wider text-primary">Filter Matrix</span>
+        </div>
+        <span class="font-label-caps text-label-caps text-outline uppercase tracking-widest">Query Stream #409-TX</span>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-space-md items-end">
+        <!-- Indicator Select -->
+        <div class="flex flex-col gap-space-xs">
+          <label class="font-label-caps text-label-caps uppercase tracking-wider text-on-surface-variant">Indicator</label>
+          <div class="relative">
+            <select name="indicator" class="w-full h-11 bg-surface-container-lowest text-on-surface font-body-md text-body-md rounded-xl px-space-md pr-10 appearance-none focus:outline-none focus:bg-surface-container-high transition-colors cursor-pointer border border-white/5">
+              <option value="all" {% if selected_indicator == 'all' %}selected{% endif %}>All Indicators</option>
+              <option value="resting_hr" {% if selected_indicator == 'resting_hr' %}selected{% endif %}>Resting HR</option>
+              <option value="hrv" {% if selected_indicator == 'hrv' %}selected{% endif %}>HRV (Heart Rate Variability)</option>
+              <option value="sleep" {% if selected_indicator == 'sleep' %}selected{% endif %}>Sleep Duration</option>
+              <option value="exercise" {% if selected_indicator == 'exercise' %}selected{% endif %}>Exercise &amp; METs</option>
+              <option value="body_temp" {% if selected_indicator == 'body_temp' %}selected{% endif %}>Body Temperature</option>
+              <option value="mood_stress" {% if selected_indicator == 'mood_stress' %}selected{% endif %}>Mood &amp; Stress</option>
+              <option value="cabin_co2" {% if selected_indicator == 'cabin_co2' %}selected{% endif %}>Cabin CO2 Concentration</option>
+            </select>
+            <span class="material-symbols-outlined absolute right-3 top-3 pointer-events-none text-on-surface-variant text-[20px]">expand_more</span>
+          </div>
+        </div>
+
+        <!-- Date Range Select -->
+        <div class="flex flex-col gap-space-xs">
+          <label class="font-label-caps text-label-caps uppercase tracking-wider text-on-surface-variant">Temporal Range</label>
+          <div class="relative">
+            <select name="range" class="w-full h-11 bg-surface-container-lowest text-on-surface font-body-md text-body-md rounded-xl px-space-md pr-10 appearance-none focus:outline-none focus:bg-surface-container-high transition-colors cursor-pointer border border-white/5">
+              <option value="7d" {% if selected_range == '7d' %}selected{% endif %}>Last 7 days (Cycle D136-D142)</option>
+              <option value="30d" {% if selected_range == '30d' %}selected{% endif %}>Last 30 days (Cycle D113-D142)</option>
+              <option value="mission" {% if selected_range == 'mission' %}selected{% endif %}>Mission Trajectory (Day 1 - 142)</option>
+            </select>
+            <span class="material-symbols-outlined absolute right-3 top-3 pointer-events-none text-on-surface-variant text-[20px]">expand_more</span>
+          </div>
+        </div>
+
+        <!-- Severity Select -->
+        <div class="flex flex-col gap-space-xs">
+          <label class="font-label-caps text-label-caps uppercase tracking-wider text-on-surface-variant">Signal Status</label>
+          <div class="relative">
+            <select name="severity" class="w-full h-11 bg-surface-container-lowest text-on-surface font-body-md text-body-md rounded-xl px-space-md pr-10 appearance-none focus:outline-none focus:bg-surface-container-high transition-colors cursor-pointer border border-white/5">
+              <option value="all" {% if selected_severity == 'all' %}selected{% endif %}>All Severities</option>
+              <option value="nominal" {% if selected_severity == 'nominal' %}selected{% endif %}>Nominal (Green Beacon)</option>
+              <option value="caution" {% if selected_severity == 'caution' %}selected{% endif %}>Caution (Elevated Drift)</option>
+              <option value="critical" {% if selected_severity == 'critical' %}selected{% endif %}>Critical (Mission Override)</option>
+            </select>
+            <span class="material-symbols-outlined absolute right-3 top-3 pointer-events-none text-on-surface-variant text-[20px]">expand_more</span>
+          </div>
+        </div>
+
+        <!-- View Segmented Control -->
+        <div class="flex flex-col gap-space-xs">
+          <label class="font-label-caps text-label-caps uppercase tracking-wider text-on-surface-variant">Display Paradigm</label>
+          <div class="grid grid-cols-2 h-11 bg-surface-container-lowest p-1 rounded-xl border border-white/5">
+            <button class="flex items-center justify-center gap-1.5 rounded-lg font-label-caps text-label-caps uppercase tracking-wider shadow-sm transition-all {% if active_view == 'table' %}text-on-primary bg-primary-container{% else %}text-on-surface-variant hover:text-on-surface{% endif %}"
+                    id="btn-view-table" onclick="setView('table')" type="button">
+              <span class="material-symbols-outlined text-[16px]">table_rows</span>
+              <span>Table</span>
+            </button>
+            <button class="flex items-center justify-center gap-1.5 rounded-lg font-label-caps text-label-caps uppercase tracking-wider transition-all {% if active_view == 'timeline' %}text-on-primary bg-primary-container{% else %}text-on-surface-variant hover:text-on-surface{% endif %}"
+                    id="btn-view-timeline" onclick="setView('timeline')" type="button">
+              <span class="material-symbols-outlined text-[16px]">timeline</span>
+              <span>Timeline</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Action Buttons Row -->
+      <div class="flex flex-wrap items-center justify-between gap-space-md pt-space-xs">
+        <div class="flex items-center gap-space-sm text-body-sm font-body-sm text-outline">
+          <span class="material-symbols-outlined text-[16px] text-primary-container">info</span>
+          <span>Filtered telemetry synced with Houston telemetry mirror 4m ago</span>
+        </div>
+        <div class="flex items-center gap-space-sm w-full sm:w-auto">
+          <a href="{% url 'telemetry:history' %}"
+             class="flex-1 sm:flex-none h-11 px-space-lg rounded-xl text-on-surface-variant hover:text-on-surface bg-surface-container-high hover:bg-surface-bright font-headline-sm text-headline-sm text-[14px] transition-colors flex items-center justify-center gap-2 border border-white/5">
+            <span class="material-symbols-outlined text-[18px]">restart_alt</span>
+            Reset
+          </a>
+          <button class="flex-1 sm:flex-none h-11 px-space-xl rounded-xl bg-gradient-to-r from-[#ff7e40] via-[#ec4899] to-[#8b5cf6] text-surface-container-lowest font-headline-sm text-headline-sm text-[15px] font-bold tracking-wide shadow-[0_0_20px_rgba(236,72,153,0.35)] hover:shadow-[0_0_28px_rgba(255,126,64,0.5)] transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
+                  type="submit">
+            <span class="material-symbols-outlined text-[18px]">filter_alt</span>
+            Apply filters
+          </button>
+        </div>
+      </div>
+    </form>
+
+    <!-- MAIN VIEW CONTAINER -->
+    <div class="w-full flex flex-col gap-space-md {% if active_view == 'timeline' %}hidden{% endif %}" id="table-view-container">
+      <!-- Data Table Card -->
+      <div class="w-full bg-surface-container-low/70 backdrop-blur-xl rounded-xl shadow-xl overflow-hidden flex flex-col border border-white/5">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse min-w-[860px]">
+            <thead>
+              <tr class="bg-surface-container-high/60 backdrop-blur-md sticky top-0 z-20 border-b border-white/5">
+                <th class="py-space-sm px-space-md font-label-caps text-label-caps uppercase tracking-wider text-outline">When</th>
+                <th class="py-space-sm px-space-md font-label-caps text-label-caps uppercase tracking-wider text-outline">Type</th>
+                <th class="py-space-sm px-space-md font-label-caps text-label-caps uppercase tracking-wider text-outline">Indicator</th>
+                <th class="py-space-sm px-space-md font-label-caps text-label-caps uppercase tracking-wider text-outline">Recorded Value</th>
+                <th class="py-space-sm px-space-md font-label-caps text-label-caps uppercase tracking-wider text-outline">Status</th>
+                <th class="py-space-sm px-space-md font-label-caps text-label-caps uppercase tracking-wider text-outline">Trend Curve</th>
+                <th class="py-space-sm px-space-md font-label-caps text-label-caps uppercase tracking-wider text-outline text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-white/5">
+              {% for row in table_rows %}
+              <tr class="h-14 hover:bg-surface-container-high/40 transition-colors group">
+                <!-- When -->
+                <td class="px-space-md whitespace-nowrap">
+                  <div class="font-headline-sm text-[13px] text-on-surface">Day {{ row.day }} · {{ row.time_str }}</div>
+                  <div class="font-label-sm text-label-sm text-outline">{{ row.location }}</div>
+                </td>
+
+                <!-- Type -->
+                <td class="px-space-md whitespace-nowrap">
+                  {% if row.type == 'alert' %}
+                  <span class="inline-flex items-center gap-1 px-space-xs py-0.5 rounded-md bg-error-container text-on-error-container font-label-caps text-[10px] uppercase font-bold tracking-wider">
+                    <span class="w-1.5 h-1.5 rounded-full bg-error animate-ping"></span>
+                    Alert
+                  </span>
+                  {% elif row.type == 'checkin' %}
+                  <span class="inline-flex items-center gap-1 px-space-xs py-0.5 rounded-md bg-secondary-container text-on-secondary-container font-label-caps text-[10px] uppercase font-bold tracking-wider">
+                    <span class="material-symbols-outlined text-[12px]">how_to_reg</span>
+                    Check-in
+                  </span>
+                  {% else %}
+                  <span class="inline-flex items-center gap-1 px-space-xs py-0.5 rounded-md bg-surface-container-highest text-primary font-label-caps text-[10px] uppercase font-bold tracking-wider">
+                    <span class="material-symbols-outlined text-[12px]">{{ row.icon|default:"vital_signs" }}</span>
+                    Reading
+                  </span>
+                  {% endif %}
+                </td>
+
+                <!-- Indicator -->
+                <td class="px-space-md whitespace-nowrap">
+                  <span class="font-headline-sm text-headline-sm text-[14px] {% if row.type == 'alert' %}text-primary{% else %}text-on-surface{% endif %}">
+                    {{ row.indicator }}
+                  </span>
+                </td>
+
+                <!-- Recorded Value -->
+                <td class="px-space-md whitespace-nowrap">
+                  {% if row.type == 'reading' %}
+                  <span class="font-telemetry-metric text-[18px] {{ row.value_highlight }}">
+                    {{ row.val_number }} <span class="font-body-sm text-body-sm text-outline">{{ row.val_unit }}</span>
+                  </span>
+                  {% else %}
+                  <span class="font-headline-sm text-headline-sm text-[14px] {{ row.value_highlight }}">
+                    {{ row.recorded_value }}
+                  </span>
+                  {% if row.sub_text %}
+                  <span class="text-body-sm font-body-sm text-on-surface-variant block">{{ row.sub_text }}</span>
+                  {% endif %}
+                  {% endif %}
+                </td>
+
+                <!-- Status -->
+                <td class="px-space-md whitespace-nowrap">
+                  <span class="inline-flex items-center gap-1.5 px-space-xs py-1 rounded-md font-label-caps text-label-caps uppercase tracking-wider {{ row.status_class }}">
+                    <span class="material-symbols-outlined text-[14px]">{{ row.status_icon }}</span>
+                    {{ row.status_label }}
+                  </span>
+                </td>
+
+                <!-- Trend Curve (Sparkline SVG) -->
+                <td class="px-space-md whitespace-nowrap">
+                  {% if row.sparkline %}
+                  <div class="w-24 h-7 flex items-center">
+                    <svg class="w-full h-full stroke-{% if row.status == 'caution' %}[#ffb020]{% elif row.status == 'critical' %}error{% else %}primary{% endif %} fill-none overflow-visible" viewBox="0 0 100 24">
+                      <polyline points="{{ row.sparkline }}" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></polyline>
+                    </svg>
+                  </div>
+                  {% else %}
+                  <span class="text-outline text-body-sm">—</span>
+                  {% endif %}
+                </td>
+
+                <!-- Action -->
+                <td class="px-space-md whitespace-nowrap text-right">
+                  {% if row.action_type == 'alert_link' %}
+                  <a class="inline-flex items-center gap-1 text-primary-container hover:text-primary font-headline-sm text-headline-sm text-[13px] transition-colors" href="{{ row.action_url }}">
+                    {{ row.action_label }}
+                    <span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+                  </a>
+                  {% else %}
+                  <span class="text-outline text-body-sm">{{ row.action_label }}</span>
+                  {% endif %}
+                </td>
+              </tr>
+              {% empty %}
+              <tr>
+                <td colspan="7" class="py-space-xl text-center text-outline">
+                  No telemetry entries match the specified filter matrix.
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Footer Pagination -->
+        <div class="p-space-md bg-surface-container-high/40 flex flex-col sm:flex-row items-center justify-between gap-space-md border-t border-white/5">
+          <div class="font-body-sm text-body-sm text-on-surface-variant">
+            Showing <span class="text-primary font-headline-sm text-[13px]">{{ page_obj.start_index|default:0 }}-{{ page_obj.end_index|default:0 }}</span> of <span class="text-on-surface font-headline-sm text-[13px]">{{ total_filtered_count }}</span> recorded entries in this cycle
+          </div>
+          <div class="flex items-center gap-space-sm">
+            {% if page_obj.has_previous %}
+            <a href="?page={{ page_obj.previous_page_number }}&indicator={{ selected_indicator }}&range={{ selected_range }}&severity={{ selected_severity }}&view={{ active_view }}"
+               class="h-11 px-space-md rounded-xl bg-surface-container hover:bg-surface-container-highest text-on-surface font-headline-sm text-headline-sm text-[13px] flex items-center gap-1 transition-colors">
+              <span class="material-symbols-outlined text-[18px]">chevron_left</span>
+              Previous
+            </a>
+            {% else %}
+            <button class="h-11 px-space-md rounded-xl bg-surface-container text-outline opacity-50 cursor-not-allowed font-headline-sm text-headline-sm text-[13px] flex items-center gap-1" disabled type="button">
+              <span class="material-symbols-outlined text-[18px]">chevron_left</span>
+              Previous
+            </button>
+            {% endif %}
+
+            <div class="flex items-center gap-1">
+              {% for p in page_obj.paginator.page_range %}
+              {% if p == page_obj.number %}
+              <span class="w-8 h-8 rounded-lg bg-primary-container text-on-primary-container font-headline-sm text-headline-sm text-[13px] flex items-center justify-center font-bold">{{ p }}</span>
+              {% elif p <= 4 or p == page_obj.paginator.num_pages %}
+              <a href="?page={{ p }}&indicator={{ selected_indicator }}&range={{ selected_range }}&severity={{ selected_severity }}&view={{ active_view }}"
+                 class="w-8 h-8 rounded-lg hover:bg-surface-container text-on-surface-variant font-headline-sm text-headline-sm text-[13px] flex items-center justify-center transition-colors">
+                {{ p }}
+              </a>
+              {% endif %}
+              {% endfor %}
+            </div>
+
+            {% if page_obj.has_next %}
+            <a href="?page={{ page_obj.next_page_number }}&indicator={{ selected_indicator }}&range={{ selected_range }}&severity={{ selected_severity }}&view={{ active_view }}"
+               class="h-11 px-space-md rounded-xl bg-surface-container hover:bg-surface-container-highest text-on-surface font-headline-sm text-headline-sm text-[13px] transition-colors flex items-center gap-1 active:scale-95">
+              Next
+              <span class="material-symbols-outlined text-[18px]">chevron_right</span>
+            </a>
+            {% else %}
+            <button class="h-11 px-space-md rounded-xl bg-surface-container text-outline opacity-50 cursor-not-allowed font-headline-sm text-headline-sm text-[13px] flex items-center gap-1" disabled type="button">
+              Next
+              <span class="material-symbols-outlined text-[18px]">chevron_right</span>
+            </button>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TIMELINE VIEW CONTAINER (hidden by default unless active) -->
+    <div class="w-full flex-col gap-space-md {% if active_view != 'timeline' %}hidden{% endif %}" id="timeline-view-container">
+      <div class="w-full bg-surface-container-low/70 backdrop-blur-xl rounded-xl p-space-lg shadow-xl flex flex-col gap-space-lg border border-white/5">
+        <div class="flex items-center justify-between pb-space-sm border-b border-surface-container-high/40">
+          <div>
+            <span class="font-label-caps text-label-caps uppercase tracking-wider text-primary">Sequential Chronology</span>
+            <div class="font-headline-sm text-headline-sm text-on-surface">Recent Transit Events &amp; Biometric Drops</div>
+          </div>
+          <span class="px-space-sm py-1 rounded-full bg-surface-container font-label-caps text-label-caps text-on-surface-variant border border-white/5">Live Synchronized</span>
+        </div>
+
+        <!-- Vertical Timeline Tree -->
+        <div class="relative pl-6 md:pl-8 flex flex-col gap-space-lg before:content-[''] before:absolute before:left-3 md:before:left-4 before:top-2 before:bottom-2 before:w-0.5 before:bg-gradient-to-b before:from-primary-container before:via-secondary-container before:to-surface-container-high">
+          {% for node in timeline_items %}
+          <div class="relative flex flex-col sm:flex-row sm:items-center justify-between gap-space-md p-space-md rounded-xl bg-surface-container-high/30 hover:bg-surface-container-high/60 transition-colors border border-white/5">
+            <!-- Node Marker -->
+            <div class="absolute -left-[30px] md:-left-[38px] w-8 h-8 rounded-full flex items-center justify-center shadow-lg
+                        {% if node.type == 'alert' %}bg-error-container text-on-error-container shadow-[0_0_12px_rgba(255,77,109,0.5)]
+                        {% elif node.type == 'checkin' %}bg-secondary-container text-on-secondary-container shadow-[0_0_10px_rgba(139,92,246,0.3)]
+                        {% elif node.status == 'caution' %}bg-[#ffb020]/20 text-[#ffb020] shadow-[0_0_10px_rgba(255,176,32,0.3)]
+                        {% else %}bg-primary-container text-on-primary-container shadow-[0_0_12px_rgba(0,240,255,0.4)]{% endif %}">
+              <span class="material-symbols-outlined text-[16px]">
+                {% if node.type == 'alert' %}warning{% elif node.type == 'checkin' %}fact_check{% else %}{{ node.icon|default:'vital_signs' }}{% endif %}
+              </span>
+            </div>
+
+            <div class="flex flex-col gap-1">
+              <div class="flex items-center gap-space-sm">
+                <span class="font-headline-sm text-headline-sm text-[15px] {% if node.type == 'alert' %}text-error font-bold{% elif node.status == 'caution' %}text-[#ffb020] font-semibold{% else %}text-on-surface font-semibold{% endif %}">
+                  {{ node.title }}
+                </span>
+                <span class="px-space-xs py-0.5 rounded font-label-caps text-[10px] uppercase font-bold {{ node.status_class }}">
+                  {{ node.status_label }}
+                </span>
+              </div>
+              <p class="font-body-md text-body-md text-on-surface-variant">{{ node.message }}</p>
+              <div class="font-label-caps text-label-caps text-outline uppercase tracking-wider">
+                Day {{ node.day }} · {{ node.time_str }} UTC · {{ node.location }}
+              </div>
+            </div>
+
+            {% if node.action_type == 'alert_link' %}
+            <a class="h-10 px-space-md rounded-xl bg-surface-container text-primary font-headline-sm text-headline-sm text-[13px] flex items-center justify-center gap-1 hover:bg-surface-container-highest transition-colors self-start sm:self-center whitespace-nowrap border border-white/5"
+               href="{{ node.action_url }}">
+              Review Alert Diagnostics
+              <span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+            </a>
+            {% elif node.type == 'checkin' %}
+            <div class="text-outline font-label-caps text-label-caps uppercase">Telemetry Validated</div>
+            {% else %}
+            <div class="text-{% if node.status == 'caution' %}[#ffb020]{% else %}primary{% endif %} font-headline-sm text-headline-sm text-[16px]">
+              {{ node.recorded_value }}
+            </div>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Visual Biometric Density Strip -->
+    <div class="w-full bg-surface-container-low/70 backdrop-blur-xl rounded-xl p-space-md flex flex-col lg:flex-row lg:items-center justify-between gap-space-md shadow-md border border-white/5">
+      <div class="flex items-center gap-space-md">
+        <div class="w-12 h-12 rounded-xl bg-surface-container-high flex items-center justify-center text-primary-container">
+          <span class="material-symbols-outlined text-[24px]">insights</span>
+        </div>
+        <div class="flex flex-col">
+          <div class="font-headline-sm text-headline-sm text-on-surface">Weekly Trend Analysis Horizon</div>
+          <div class="font-body-sm text-body-sm text-on-surface-variant">7-day rolling average correlates sleep suppression with localized cabin CO2 spikes.</div>
+        </div>
+      </div>
+      <div class="flex items-center gap-space-sm">
+        <a class="h-10 px-space-md rounded-xl bg-surface-container hover:bg-surface-container-high text-on-surface font-headline-sm text-headline-sm text-[13px] transition-colors flex items-center gap-2 border border-white/5"
+           href="{% url 'core:profile' %}">
+          <span class="material-symbols-outlined text-[16px]">tune</span>
+          Manage Baselines
+        </a>
+        <a class="h-10 px-space-md rounded-xl bg-primary-container text-on-primary-container font-headline-sm text-headline-sm text-[13px] font-semibold transition-colors flex items-center gap-2 shadow-[0_0_12px_rgba(0,240,255,0.25)] hover:scale-105"
+           href="{% url 'core:ground_support' %}">
+          <span class="material-symbols-outlined text-[16px]">send</span>
+          Transmit Log to Earth
+        </a>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  function setView(view) {
+    const tableContainer = document.getElementById('table-view-container');
+    const timelineContainer = document.getElementById('timeline-view-container');
+    const btnTable = document.getElementById('btn-view-table');
+    const btnTimeline = document.getElementById('btn-view-timeline');
+    const inputViewMode = document.getElementById('input-view-mode');
+
+    if (inputViewMode) inputViewMode.value = view;
+
+    if (view === 'table') {
+      tableContainer.classList.remove('hidden');
+      tableContainer.classList.add('flex');
+      timelineContainer.classList.add('hidden');
+      timelineContainer.classList.remove('flex');
+
+      btnTable.className = "flex items-center justify-center gap-1.5 rounded-lg text-on-primary bg-primary-container font-label-caps text-label-caps uppercase tracking-wider shadow-sm transition-all";
+      btnTimeline.className = "flex items-center justify-center gap-1.5 rounded-lg text-on-surface-variant hover:text-on-surface font-label-caps text-label-caps uppercase tracking-wider transition-all";
+    } else {
+      timelineContainer.classList.remove('hidden');
+      timelineContainer.classList.add('flex');
+      tableContainer.classList.add('hidden');
+      tableContainer.classList.remove('flex');
+
+      btnTimeline.className = "flex items-center justify-center gap-1.5 rounded-lg text-on-primary bg-primary-container font-label-caps text-label-caps uppercase tracking-wider shadow-sm transition-all";
+      btnTable.className = "flex items-center justify-center gap-1.5 rounded-lg text-on-surface-variant hover:text-on-surface font-label-caps text-label-caps uppercase tracking-wider transition-all";
+    }
+  }
+</script>
+{% endblock %}

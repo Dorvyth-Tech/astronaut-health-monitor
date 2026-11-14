@@ -1,0 +1,290 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Profile &amp; Baselines | Space-Pulse{% endblock %}
+
+{% block content %}
+<div class="w-full max-w-7xl mx-auto px-margin sm:px-gutter py-space-lg flex flex-col gap-space-lg">
+
+  <!-- Header Section -->
+  <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-space-md pb-space-sm border-b border-white/5">
+    <div>
+      <div class="flex items-center gap-2 mb-1">
+        <span class="w-2 h-2 rounded-full bg-primary-container animate-pulse"></span>
+        <span class="font-label-caps text-label-caps text-outline uppercase tracking-wider">
+          NASA HRP Crew Dossier · Flight Medical Record
+        </span>
+      </div>
+      <h1 class="font-headline-lg text-headline-lg text-primary tracking-tight">Astronaut Profile &amp; Baselines</h1>
+      <p class="font-body-md text-body-md text-on-surface-variant">
+        Pre-flight calibrations, mission telemetry credentials, and personal physiological setpoints.
+      </p>
+    </div>
+
+    <!-- Active Crew Indicator -->
+    <div class="flex items-center gap-space-sm bg-surface-container-high px-space-md py-space-xs rounded-xl border border-white/5 self-start md:self-auto">
+      <div class="w-2.5 h-2.5 rounded-full bg-[#22E3A0] shadow-[0_0_8px_#22E3A0]"></div>
+      <span class="font-headline-sm text-xs font-semibold text-primary">
+        ACTIVE PROFILE: {{ current_astronaut.full_title }}
+      </span>
+    </div>
+  </div>
+
+  <!-- Notification Banner -->
+  {% if success_message %}
+  <div class="p-space-md rounded-xl bg-nominal/15 border border-nominal/40 text-nominal flex items-center justify-between shadow-[0_0_15px_rgba(34,227,160,0.15)] animate-fade-in">
+    <div class="flex items-center gap-space-sm">
+      <span class="material-symbols-outlined text-[22px]">check_circle</span>
+      <span class="font-headline-sm text-sm font-semibold">{{ success_message }}</span>
+    </div>
+    <span class="text-xs font-mono text-nominal/80">RECALIBRATED</span>
+  </div>
+  {% endif %}
+
+  {% if error_message %}
+  <div class="p-space-md rounded-xl bg-error/15 border border-error/40 text-error flex items-center gap-space-sm">
+    <span class="material-symbols-outlined text-[22px]">error</span>
+    <span class="font-body-md text-sm font-semibold">{{ error_message }}</span>
+  </div>
+  {% endif %}
+
+  <div class="grid grid-cols-1 lg:grid-cols-12 gap-space-lg items-start">
+
+    <!-- LEFT COLUMN: Astronaut Bio-Card & Crew Switcher (4 cols) -->
+    <div class="lg:col-span-4 flex flex-col gap-space-md">
+
+      <!-- Astronaut Dossier Pod -->
+      <div class="rounded-xl bg-surface-container/70 backdrop-blur-md p-space-lg border border-white/5 shadow-xl flex flex-col gap-space-md relative overflow-hidden">
+        <div class="absolute -top-12 -right-12 w-32 h-32 bg-primary-container/10 rounded-full blur-2xl pointer-events-none"></div>
+
+        <div class="flex items-center gap-space-md">
+          <div class="relative">
+            <div class="w-16 h-16 rounded-2xl bg-gradient-to-tr from-surface-container-high to-surface-container-highest border-2 border-primary-container/40 flex items-center justify-center text-primary-container shadow-[0_0_16px_rgba(0,240,255,0.25)]">
+              <span class="material-symbols-outlined text-[36px]">sports_martial_arts</span>
+            </div>
+            <span class="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-[#22E3A0] border-2 border-surface-container-lowest"></span>
+          </div>
+
+          <div>
+            <div class="font-headline-md text-xl text-primary font-bold tracking-tight">
+              {{ current_astronaut.full_title }}
+            </div>
+            <div class="font-body-sm text-xs text-on-surface-variant">
+              {{ current_astronaut.role_description }}
+            </div>
+            <div class="font-mono text-[11px] text-outline mt-0.5">
+              {{ current_astronaut.email }}
+            </div>
+          </div>
+        </div>
+
+        <div class="h-px w-full bg-white/5 my-1"></div>
+
+        <!-- Mission Transit Progress -->
+        <div class="flex flex-col gap-1.5">
+          <div class="flex items-center justify-between text-xs">
+            <span class="font-label-caps text-outline uppercase tracking-wider">Mars Transit Progress</span>
+            <span class="font-headline-sm text-primary font-bold">{{ current_astronaut.mission_progress_pct }}%</span>
+          </div>
+          <div class="w-full h-2 rounded-full bg-surface-container-high overflow-hidden p-0.5 border border-white/5">
+            <div class="h-full rounded-full bg-gradient-to-r from-primary-container to-secondary" style="width: {{ current_astronaut.mission_progress_pct }}%;"></div>
+          </div>
+          <div class="flex items-center justify-between font-mono text-[11px] text-outline">
+            <span>Sol {{ current_astronaut.current_mission_day }} (Elapsed)</span>
+            <span>{{ current_astronaut.mission_total_days }} Total Sols</span>
+          </div>
+        </div>
+
+        <!-- Bio Attributes Specs Grid -->
+        <div class="grid grid-cols-2 gap-2 pt-2 border-t border-white/5 text-xs">
+          <div class="p-space-xs rounded-lg bg-surface-container-high/60 border border-white/5">
+            <div class="text-outline text-[10px] uppercase font-label-caps">Habitat Pod</div>
+            <div class="font-headline-sm text-on-surface font-semibold mt-0.5">{{ current_astronaut.habitat }}</div>
+          </div>
+          <div class="p-space-xs rounded-lg bg-surface-container-high/60 border border-white/5">
+            <div class="text-outline text-[10px] uppercase font-label-caps">Mission ID</div>
+            <div class="font-headline-sm text-on-surface font-semibold mt-0.5 truncate">ARES-V-HAB</div>
+          </div>
+          <div class="p-space-xs rounded-lg bg-surface-container-high/60 border border-white/5">
+            <div class="text-outline text-[10px] uppercase font-label-caps">Flight Surgeon</div>
+            <div class="font-headline-sm text-on-surface font-semibold mt-0.5">GND-SURG-2</div>
+          </div>
+          <div class="p-space-xs rounded-lg bg-surface-container-high/60 border border-white/5">
+            <div class="text-outline text-[10px] uppercase font-label-caps">Ground Link</div>
+            <div class="font-headline-sm text-primary-container font-semibold mt-0.5">Goldstone 70m</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Crew Roster Switcher (All 4 Seeded Astronauts) -->
+      <div class="rounded-xl bg-surface-container/70 backdrop-blur-md p-space-md border border-white/5 shadow-xl flex flex-col gap-space-sm">
+        <div class="flex items-center justify-between pb-1 border-b border-white/5">
+          <span class="font-label-caps text-xs text-outline uppercase tracking-wider">Ares V Crew Manifest</span>
+          <span class="font-mono text-[11px] text-primary-container">4 Active</span>
+        </div>
+
+        <div class="flex flex-col gap-1.5">
+          {% for crew in all_crew %}
+          <a href="?switch={{ crew.id }}"
+             class="flex items-center justify-between p-space-xs rounded-lg transition-all border {% if crew.id == current_astronaut.id %}bg-primary-container/15 border-primary-container/60 shadow-[0_0_10px_rgba(0,240,255,0.15)]{% else %}bg-surface-container-high/40 hover:bg-surface-container-high border-white/5 text-on-surface-variant hover:text-on-surface{% endif %}">
+            <div class="flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full {% if crew.id == current_astronaut.id %}bg-primary-container animate-ping{% else %}bg-outline{% endif %}"></span>
+              <div>
+                <div class="font-headline-sm text-xs font-semibold text-primary">{{ crew.full_title }}</div>
+                <div class="font-body-sm text-[10px] text-outline truncate max-w-[160px]">{{ crew.role_description }}</div>
+              </div>
+            </div>
+            {% if crew.id == current_astronaut.id %}
+            <span class="px-1.5 py-0.5 rounded text-[10px] bg-primary-container text-on-primary-container font-bold uppercase">Active</span>
+            {% else %}
+            <span class="material-symbols-outlined text-outline text-[16px]">chevron_right</span>
+            {% endif %}
+          </a>
+          {% endfor %}
+        </div>
+      </div>
+
+    </div>
+
+    <!-- RIGHT COLUMN: Editable Baselines Form (8 cols) -->
+    <div class="lg:col-span-8 flex flex-col gap-space-md">
+
+      <form method="POST" action="{% url 'core:profile' %}" class="flex flex-col gap-space-md">
+        {% csrf_token %}
+
+        <!-- Baselines Panel -->
+        <div class="rounded-xl bg-surface-container/70 backdrop-blur-md p-space-lg border border-white/5 shadow-xl flex flex-col gap-space-md">
+          <div class="flex items-center justify-between pb-space-sm border-b border-white/5">
+            <div class="flex items-center gap-2">
+              <span class="material-symbols-outlined text-primary-container text-[22px]">tune</span>
+              <div>
+                <h2 class="font-headline-md text-headline-md text-primary tracking-wide">
+                  Calibrated Physiological Baselines
+                </h2>
+                <p class="font-body-sm text-body-sm text-on-surface-variant">
+                  Space-Pulse compares live telemetry against these calibrated personal setpoints to calculate clinical anomalies and trend streaks.
+                </p>
+              </div>
+            </div>
+            <button type="submit"
+                    class="px-space-md py-space-xs rounded-xl bg-primary-container text-on-primary-container font-headline-sm text-sm font-semibold flex items-center gap-2 shadow-[0_0_12px_rgba(0,240,255,0.25)] hover:scale-105 transition-transform shrink-0">
+              <span class="material-symbols-outlined text-[18px]">save</span>
+              Save Baselines
+            </button>
+          </div>
+
+          <!-- 7 Metric Baseline Cards -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-space-md">
+            {% for item in baseline_items %}
+            <div class="p-space-md rounded-xl bg-surface-container-high/50 border border-white/5 flex flex-col justify-between gap-space-sm hover:border-primary-container/30 transition-colors">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <div class="w-8 h-8 rounded-lg bg-surface-container-highest flex items-center justify-center text-primary-container">
+                    <span class="material-symbols-outlined text-[18px]">{{ item.icon }}</span>
+                  </div>
+                  <div>
+                    <span class="font-headline-sm text-sm font-semibold text-primary">{{ item.label }}</span>
+                    <span class="font-mono text-xs text-outline block">({{ item.unit }})</span>
+                  </div>
+                </div>
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-mono bg-white/5 text-on-surface-variant border border-white/5">
+                  Ref: {{ item.reference }}
+                </span>
+              </div>
+
+              <p class="font-body-sm text-[11px] text-on-surface-variant leading-relaxed">
+                {{ item.rationale }}
+              </p>
+
+              <!-- Value Input Control -->
+              <div class="flex items-center gap-space-sm pt-2 border-t border-white/5">
+                <label for="id_{{ item.key }}" class="font-label-caps text-[11px] text-outline uppercase tracking-wider shrink-0">
+                  Baseline Value:
+                </label>
+                <div class="relative flex-1">
+                  <input type="number"
+                         step="{{ item.step }}"
+                         id="id_{{ item.key }}"
+                         name="baseline_{{ item.key }}"
+                         value="{{ item.value }}"
+                         required
+                         class="w-full bg-surface-container-lowest border border-white/10 rounded-lg px-space-sm py-1 font-mono text-sm text-primary focus:outline-none focus:border-primary-container focus:ring-1 focus:ring-primary-container pr-12 transition-all">
+                  <span class="absolute right-2.5 top-1/2 -translate-y-1/2 font-mono text-xs text-outline pointer-events-none">
+                    {{ item.unit }}
+                  </span>
+                </div>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+
+        <!-- Astronaut Bio Identity Attributes (Editable) -->
+        <div class="rounded-xl bg-surface-container/70 backdrop-blur-md p-space-lg border border-white/5 shadow-xl flex flex-col gap-space-md">
+          <div class="flex items-center gap-2 pb-space-sm border-b border-white/5">
+            <span class="material-symbols-outlined text-primary-container text-[20px]">badge</span>
+            <h3 class="font-headline-sm text-headline-sm text-primary tracking-wide">
+              Crew Bio-Identity &amp; Habitat Stationing
+            </h3>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-space-md">
+            <div>
+              <label class="block font-label-caps text-xs text-outline uppercase mb-1">Full Legal Name</label>
+              <input type="text"
+                     name="name"
+                     value="{{ current_astronaut.name }}"
+                     required
+                     class="w-full bg-surface-container-lowest border border-white/10 rounded-lg px-space-md py-space-xs font-body-md text-sm text-on-surface focus:outline-none focus:border-primary-container transition-all">
+            </div>
+
+            <div>
+              <label class="block font-label-caps text-xs text-outline uppercase mb-1">Military / NASA Rank</label>
+              <input type="text"
+                     name="rank"
+                     value="{{ current_astronaut.rank }}"
+                     required
+                     class="w-full bg-surface-container-lowest border border-white/10 rounded-lg px-space-md py-space-xs font-body-md text-sm text-on-surface focus:outline-none focus:border-primary-container transition-all">
+            </div>
+
+            <div>
+              <label class="block font-label-caps text-xs text-outline uppercase mb-1">Assigned Habitat Module</label>
+              <input type="text"
+                     name="habitat"
+                     value="{{ current_astronaut.habitat }}"
+                     required
+                     class="w-full bg-surface-container-lowest border border-white/10 rounded-lg px-space-md py-space-xs font-body-md text-sm text-on-surface focus:outline-none focus:border-primary-container transition-all">
+            </div>
+
+            <div>
+              <label class="block font-label-caps text-xs text-outline uppercase mb-1">Mission Specialist Role</label>
+              <input type="text"
+                     name="role_description"
+                     value="{{ current_astronaut.role_description }}"
+                     required
+                     class="w-full bg-surface-container-lowest border border-white/10 rounded-lg px-space-md py-space-xs font-body-md text-sm text-on-surface focus:outline-none focus:border-primary-container transition-all">
+            </div>
+          </div>
+
+          <!-- Bottom Action Buttons -->
+          <div class="flex items-center justify-end gap-space-sm pt-space-sm border-t border-white/5">
+            <button type="reset"
+                    class="px-space-md py-space-xs rounded-xl bg-surface-container-high hover:bg-surface-container-highest text-on-surface text-body-sm font-semibold transition-all">
+              Discard Changes
+            </button>
+            <button type="submit"
+                    class="px-space-lg py-space-xs rounded-xl bg-primary-container text-on-primary-container font-headline-sm text-sm font-bold flex items-center gap-2 shadow-[0_0_14px_rgba(0,240,255,0.25)] hover:scale-105 transition-transform">
+              <span class="material-symbols-outlined text-[18px]">cloud_sync</span>
+              Update Bio-File &amp; Recalibrate Baselines
+            </button>
+          </div>
+        </div>
+
+      </form>
+
+    </div>
+
+  </div>
+
+</div>
+{% endblock %}

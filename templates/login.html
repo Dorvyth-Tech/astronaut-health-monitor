@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Space-Pulse - Login</title>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- SHARED CONFIG: colours, fonts, keyframes -->
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            navy: '#0A0E1A',
+            surface: '#0F131F',
+            'surface-dark': '#06080F',
+            cyan: '#00F0FF',
+            violet: '#8B5CF6',
+            magenta: '#EC4899',
+            orange: '#FF6B35',
+            nominal: '#22E3A0',
+            caution: '#FFB020',
+            critical: '#FF4D6D',
+          },
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['Space Grotesk', 'monospace'],
+          },
+          animation: {
+            'orbit-slow': 'orbit 20s linear infinite',
+            'pulse-glow': 'pulseGlow 3s ease-in-out infinite',
+            'star-drift-1': 'starDrift1 90s linear infinite',
+            'star-drift-2': 'starDrift2 140s linear infinite',
+          },
+          keyframes: {
+            orbit: {
+              '0%': { transform: 'rotate(0deg) translateX(58px) rotate(0deg)' },
+              '100%': { transform: 'rotate(360deg) translateX(58px) rotate(-360deg)' },
+            },
+            pulseGlow: {
+              '0%, 100%': { opacity: '0.4', filter: 'drop-shadow(0 0 15px rgba(0, 240, 255, 0.3))' },
+              '50%': { opacity: '0.8', filter: 'drop-shadow(0 0 25px rgba(0, 240, 255, 0.7))' },
+            },
+            starDrift1: {
+              '0%': { backgroundPosition: '0 0' },
+              '100%': { backgroundPosition: '400px 400px' }
+            },
+            starDrift2: {
+              '0%': { backgroundPosition: '0 0' },
+              '100%': { backgroundPosition: '-700px 700px' }
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* Starfield background patterns */
+    .starfield-1 {
+      background-image: radial-gradient(1px 1px at 20px 30px, #ffffff, rgba(0,0,0,0)),
+                        radial-gradient(1.5px 1.5px at 150px 80px, #00F0FF, rgba(0,0,0,0)),
+                        radial-gradient(1px 1px at 240px 190px, #ffffff, rgba(0,0,0,0)),
+                        radial-gradient(1.5px 1.5px at 320px 290px, #8B5CF6, rgba(0,0,0,0)),
+                        radial-gradient(1px 1px at 80px 350px, #ffffff, rgba(0,0,0,0));
+      background-size: 400px 400px;
+    }
+    .starfield-2 {
+      background-image: radial-gradient(1px 1px at 90px 40px, #ffffff, rgba(0,0,0,0)),
+                        radial-gradient(1px 1px at 280px 120px, #ffffff, rgba(0,0,0,0)),
+                        radial-gradient(2px 2px at 450px 210px, #00F0FF, rgba(0,0,0,0)),
+                        radial-gradient(1px 1px at 580px 390px, #ffffff, rgba(0,0,0,0)),
+                        radial-gradient(1.5px 1.5px at 620px 520px, #EC4899, rgba(0,0,0,0));
+      background-size: 700px 700px;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .animate-orbit-slow,
+      .animate-pulse-glow,
+      .animate-star-drift-1,
+      .animate-star-drift-2 {
+        animation: none !important;
+      }
+      .hover-lift {
+        transform: none !important;
+      }
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-gradient-to-b from-[#0A0E1A] to-[#000000] text-white font-sans antialiased relative flex flex-col justify-center items-center p-4 selection:bg-cyan selection:text-navy overflow-x-hidden">
+
+  <!-- A11y Skip Link -->
+  <a href="#main" class="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 z-50 px-4 py-2 bg-cyan text-navy font-semibold rounded-lg shadow-lg">Skip to main content</a>
+
+  <!-- Fixed Cosmic Starfield Layers -->
+  <div class="fixed inset-0 pointer-events-none starfield-1 animate-star-drift-1 opacity-70 z-0"></div>
+  <div class="fixed inset-0 pointer-events-none starfield-2 animate-star-drift-2 opacity-50 z-0"></div>
+
+  <!-- Ambient Nebula Lighting Glows -->
+  <div class="fixed -top-40 -left-40 w-[600px] h-[600px] bg-violet/20 rounded-full blur-[140px] pointer-events-none z-0"></div>
+  <div class="fixed -bottom-40 -right-40 w-[600px] h-[600px] bg-magenta/15 rounded-full blur-[140px] pointer-events-none z-0"></div>
+
+  <!-- Decorative Orbit Lines Behind Card -->
+  <div class="absolute w-[680px] h-[680px] pointer-events-none z-0 hidden md:flex items-center justify-center opacity-40">
+    <svg class="w-full h-full animate-[spin_120s_linear_infinite]" viewBox="0 0 600 600" fill="none" aria-hidden="true">
+      <ellipse cx="300" cy="300" rx="270" ry="140" stroke="#00F0FF" stroke-opacity="0.3" stroke-width="1.5" stroke-dasharray="6 8" transform="rotate(-25 300 300)"/>
+      <ellipse cx="300" cy="300" rx="220" ry="90" stroke="#8B5CF6" stroke-opacity="0.25" stroke-width="1" stroke-dasharray="4 6" transform="rotate(35 300 300)"/>
+    </svg>
+  </div>
+
+  <main id="main" class="w-full max-w-md relative z-10 my-auto">
+    <!-- Login Glass Container Card -->
+    <!-- component: LoginCard -->
+    <div class="bg-white/5 backdrop-blur-2xl rounded-2xl border border-cyan/30 shadow-[0_0_40px_rgba(0,0,0,0.8),0_0_24px_rgba(0,240,255,0.12)] p-6 sm:p-8 relative">
+      
+      <!-- Top Orbital Planetary Graphic -->
+      <div class="flex flex-col items-center justify-center mb-6">
+        <div class="relative w-40 h-40 flex items-center justify-center" aria-hidden="true">
+          <!-- Ambient Planet Glow -->
+          <div class="absolute inset-0 bg-violet/30 rounded-full blur-xl"></div>
+          
+          <svg class="w-36 h-36 relative z-10" viewBox="0 0 160 160" fill="none">
+            <defs>
+              <linearGradient id="planetGrad" x1="20" y1="20" x2="140" y2="140" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stop-color="#8B5CF6"/>
+                <stop offset="60%" stop-color="#4C1D95"/>
+                <stop offset="100%" stop-color="#EC4899"/>
+              </linearGradient>
+              <linearGradient id="ringGrad" x1="10" y1="80" x2="150" y2="80" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stop-color="#00F0FF" stop-opacity="0.1"/>
+                <stop offset="50%" stop-color="#00F0FF" stop-opacity="0.9"/>
+                <stop offset="100%" stop-color="#00F0FF" stop-opacity="0.2"/>
+              </linearGradient>
+            </defs>
+            <!-- Planet Core -->
+            <circle cx="80" cy="80" r="38" fill="url(#planetGrad)" stroke="rgba(255,255,255,0.2)" stroke-width="1.5" />
+            
+            <!-- Planet Shading & Craters/Bands -->
+            <path d="M 46 70 Q 80 84 114 70" stroke="rgba(255,255,255,0.15)" stroke-width="2" fill="none"/>
+            <path d="M 50 90 Q 80 102 110 90" stroke="rgba(236,72,153,0.3)" stroke-width="2.5" fill="none"/>
+            <circle cx="68" cy="65" r="4" fill="rgba(255,255,255,0.15)" />
+            <circle cx="95" cy="88" r="6" fill="rgba(0,0,0,0.25)" />
+            
+            <!-- Planetary Ring -->
+            <ellipse cx="80" cy="80" rx="66" ry="22" stroke="url(#ringGrad)" stroke-width="2.5" transform="rotate(-18 80 80)"/>
+            <ellipse cx="80" cy="80" rx="72" ry="24" stroke="#00F0FF" stroke-opacity="0.3" stroke-width="1" stroke-dasharray="3 5" transform="rotate(-18 80 80)"/>
+          </svg>
+
+          <!-- Orbiting Moon Container -->
+          <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div class="w-3.5 h-3.5 bg-cyan rounded-full shadow-[0_0_12px_#00F0FF] animate-orbit-slow"></div>
+          </div>
+        </div>
+
+        <!-- Space-Pulse Logo and Wordmark -->
+        <div class="flex items-center gap-2 mt-2">
+          <svg class="w-7 h-7 text-cyan" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+          </svg>
+          <span class="font-mono font-bold text-2xl tracking-tight text-white">SPACE-PULSE</span>
+        </div>
+        <p class="text-white/70 text-sm mt-1 tracking-wide">Your health, in orbit.</p>
+        
+        <!-- Mission Metadata Tag -->
+        <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-cyan/10 border border-cyan/30 text-cyan text-xs font-mono mt-3">
+          <span class="w-1.5 h-1.5 rounded-full bg-cyan animate-pulse"></span>
+          <span>MISSION CYCLE · DAY 142 OF 540</span>
+        </div>
+      </div>
+
+      <!-- Authentication Form -->
+      <form id="loginForm" method="POST" action="{% url 'core:login' %}" class="space-y-4" onsubmit="handleLoginSubmit(event)" novalidate>
+        {% csrf_token %}
+        <input type="hidden" name="next" id="nextInput" value="{{ next_url|default:'' }}">
+
+        <!-- Live Error Alert Banner -->
+        <div id="authErrorMessage" class="{% if not error %}hidden{% endif %} rounded-xl bg-critical/15 border border-critical/40 p-3.5 text-critical text-sm flex items-center gap-3" role="alert" aria-live="polite">
+          <svg class="w-5 h-5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="12" y1="8" x2="12" y2="12"/>
+            <line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          <span id="authErrorText">{{ error|default:"Email or password not recognised." }}</span>
+        </div>
+
+        <!-- Email Field -->
+        <div>
+          <label for="emailInput" class="block text-sm font-medium text-white/80 mb-1.5">Mission Email / ID</label>
+          <div class="relative">
+            <input 
+              type="email" 
+              id="emailInput" 
+              name="email" 
+              required
+              value="{{ submitted_email|default:'amara.reyes@mission.example' }}"
+              placeholder="amara.reyes@mission.example"
+              class="w-full h-12 bg-white/5 border border-white/20 rounded-xl px-4 text-white text-base placeholder-white/30 focus:outline-none focus:border-cyan focus:ring-2 focus:ring-cyan/40 transition-all font-mono"
+            >
+            <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-white/40">
+              <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <rect width="20" height="16" x="2" y="4" rx="2"/>
+                <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <!-- Password Field -->
+        <div>
+          <div class="flex items-center justify-between mb-1.5">
+            <label for="passwordInput" class="block text-sm font-medium text-white/80">Security Token / Password</label>
+            <span class="text-xs text-cyan/80 font-mono">HAB-01 CRYPT</span>
+          </div>
+          <div class="relative">
+            <input 
+              type="password" 
+              id="passwordInput" 
+              name="password" 
+              required
+              value="validAccess2026"
+              placeholder="Enter flight access code"
+              class="w-full h-12 bg-white/5 border border-white/20 rounded-xl px-4 pr-12 text-white text-base placeholder-white/30 focus:outline-none focus:border-cyan focus:ring-2 focus:ring-cyan/40 transition-all font-mono tracking-wider"
+            >
+            <!-- Show/Hide Button (Min 44x44 Touch Target) -->
+            <button 
+              type="button" 
+              id="togglePasswordBtn"
+              onclick="togglePasswordVisibility()"
+              class="absolute inset-y-0 right-0 w-12 h-12 flex items-center justify-center text-white/60 hover:text-cyan focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan rounded-r-xl transition-colors"
+              aria-label="Toggle password visibility"
+            >
+              <svg id="eyeIcon" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/>
+                <circle cx="12" cy="12" r="3"/>
+              </svg>
+              <svg id="eyeOffIcon" class="w-5 h-5 hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/>
+                <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/>
+                <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/>
+                <line x1="2" x2="22" y1="2" y2="22"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Telemetry Connection Info -->
+        <div class="pt-1 flex items-center justify-between text-xs text-white/60 font-mono">
+          <span class="flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-nominal"></span>
+            Bio-telemetry stream active
+          </span>
+          <span>Latency: 18m 42s</span>
+        </div>
+
+        <!-- Primary Action Button: Sign In -->
+        <div class="pt-2">
+          <button 
+            type="submit" 
+            id="signInButton"
+            class="w-full h-14 rounded-xl bg-gradient-to-r from-orange to-magenta hover:brightness-110 active:scale-[0.98] text-navy font-bold text-base transition-all duration-200 shadow-[0_0_24px_rgba(255,107,53,0.35)] flex items-center justify-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan focus-visible:ring-offset-2 focus-visible:ring-offset-navy cursor-pointer"
+          >
+            <!-- Default Content -->
+            <span id="signInBtnText">Sign In to Cockpit</span>
+            <svg id="signInBtnArrow" class="w-5 h-5 text-navy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M5 12h14M12 5l7 7-7 7"/>
+            </svg>
+
+            <!-- Loading Spinner State (Hidden by default) -->
+            <div id="signInLoadingSpinner" class="hidden items-center gap-2" aria-busy="true">
+              <svg class="animate-spin h-5 w-5 text-navy" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              <span>Signing in...</span>
+            </div>
+          </button>
+        </div>
+
+        <!-- Quick Demo Credentials Selector -->
+        <div class="pt-3 border-t border-white/10 text-center">
+          <span class="text-xs text-white/50 block mb-2 font-mono">SIMULATION PRESETS</span>
+          <div class="flex items-center justify-center gap-2">
+            <button 
+              type="button" 
+              onclick="fillPreset('amara.reyes@mission.example', 'validAccess2026')"
+              class="px-2.5 py-1 rounded bg-white/5 hover:bg-cyan/15 border border-white/10 hover:border-cyan/40 text-xs text-white/80 transition-colors font-mono"
+            >
+              Cmdr. Reyes (Sol 142)
+            </button>
+            <button 
+              type="button" 
+              onclick="fillPreset('flight.surgeon@jsc.nasa.gov', 'validAccess2026')"
+              class="px-2.5 py-1 rounded bg-white/5 hover:bg-violet/15 border border-white/10 hover:border-violet/40 text-xs text-white/80 transition-colors font-mono"
+            >
+              Flight Surgeon Vance
+            </button>
+          </div>
+        </div>
+
+      </form>
+    </div>
+    <!-- /component: LoginCard -->
+
+    <!-- Standard Space-Pulse Prototype Disclaimer -->
+    <!-- component: FooterDisclaimer -->
+    <footer class="text-center py-6 text-xs text-white/70">
+      Prototype for demonstration purposes. Not a medical device.
+      <div class="mt-1 text-white/40 font-mono text-[11px]">NASA SPACE APPS CHALLENGE 2026 · DEEP-SPACE SUITE</div>
+    </footer>
+    <!-- /component: FooterDisclaimer -->
+  </main>
+
+  <script>
+    function togglePasswordVisibility() {
+      const pwd = document.getElementById('passwordInput');
+      const eyeIcon = document.getElementById('eyeIcon');
+      const eyeOffIcon = document.getElementById('eyeOffIcon');
+      
+      if (pwd.type === 'password') {
+        pwd.type = 'text';
+        eyeIcon.classList.add('hidden');
+        eyeOffIcon.classList.remove('hidden');
+      } else {
+        pwd.type = 'password';
+        eyeIcon.classList.remove('hidden');
+        eyeOffIcon.classList.add('hidden');
+      }
+    }
+
+    function fillPreset(email, password) {
+      document.getElementById('emailInput').value = email;
+      document.getElementById('passwordInput').value = password;
+      const errBox = document.getElementById('authErrorMessage');
+      if (errBox) errBox.classList.add('hidden');
+    }
+
+    function handleLoginSubmit(e) {
+      const email = document.getElementById('emailInput').value.trim();
+      const pwd = document.getElementById('passwordInput').value.trim();
+      const errBox = document.getElementById('authErrorMessage');
+      const btnText = document.getElementById('signInBtnText');
+      const btnArrow = document.getElementById('signInBtnArrow');
+      const spinner = document.getElementById('signInLoadingSpinner');
+      const submitBtn = document.getElementById('signInButton');
+
+      // Client-side quick check
+      if (!email || !pwd || email.includes('error')) {
+        e.preventDefault();
+        errBox.classList.remove('hidden');
+        document.getElementById('authErrorText').textContent = "Email or password not recognised.";
+        return false;
+      }
+
+      // Show spinner while form posts
+      btnText.classList.add('hidden');
+      btnArrow.classList.add('hidden');
+      spinner.classList.remove('hidden');
+      spinner.classList.add('flex');
+      submitBtn.disabled = true;
+
+      // Allow form to submit to Django backend
+      document.getElementById('loginForm').submit();
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,617 @@
+{% extends 'base.html' %}
+
+{% block title %}Alert Diagnostic Detail | Space-Pulse{% endblock %}
+
+{% block content %}
+<div class="flex flex-col w-full">
+  <div class="w-full max-w-[1440px] mx-auto px-margin sm:px-margin-tablet lg:px-margin-desktop py-space-lg flex flex-col gap-space-lg">
+    
+    <!-- Navigation Back Link -->
+    <div class="flex items-center justify-between text-on-surface-variant font-label-caps text-label-caps tracking-widest uppercase">
+      <a class="flex items-center gap-space-xs text-on-surface-variant hover:text-primary transition-colors"
+         href="{% url 'alerts:list' %}">
+        <span class="material-symbols-outlined text-[16px]">arrow_back</span>
+        <span>Back to Alerts Hub</span>
+      </a>
+      <div class="flex items-center gap-space-sm">
+        <span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+        <span>Telemetry Stream #{{ alert.id }}-{{ alert.metric|upper }}</span>
+      </div>
+    </div>
+
+    <!-- Header Diagnostic Pod -->
+    <section class="relative overflow-hidden rounded-xl bg-surface-container-low/90 backdrop-blur-xl p-space-lg lg:p-space-xl shadow-xl border border-white/5">
+      <div class="absolute -right-20 -top-24 w-80 h-80 rounded-full bg-secondary-container/20 blur-3xl pointer-events-none"></div>
+      <div class="absolute right-0 bottom-0 opacity-10 pointer-events-none">
+        <svg fill="none" height="140" viewBox="0 0 240 140" width="240">
+          <circle class="text-primary-container" cx="180" cy="100" r="80" stroke="currentColor" stroke-dasharray="4 8" stroke-width="1.5"></circle>
+          <circle class="text-primary-container" cx="180" cy="100" r="50" stroke="currentColor" stroke-width="1"></circle>
+        </svg>
+      </div>
+
+      <div class="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-space-md">
+        <div class="flex items-start gap-space-md">
+          <div class="w-14 h-14 rounded-xl bg-surface-container-high flex items-center justify-center text-primary-container shadow-md shrink-0">
+            <span class="material-symbols-outlined text-[32px]">
+              {% if alert.metric == 'sleep' %}bedtime
+              {% elif alert.metric == 'cabin_co2' %}air
+              {% elif alert.metric == 'resting_hr' %}monitor_heart
+              {% else %}vital_signs{% endif %}
+            </span>
+          </div>
+          <div class="flex flex-col gap-space-xs">
+            <div class="flex flex-wrap items-center gap-space-sm">
+              <span class="inline-flex items-center gap-space-xs px-space-sm py-0.5 rounded-full bg-surface-container-highest {% if alert.severity == 'caution' %}text-[#FFB020]{% elif alert.severity == 'critical' %}text-error{% else %}text-[#22E3A0]{% endif %} font-label-caps text-label-caps uppercase tracking-wider">
+                <span class="w-2 h-2 rounded-full {% if alert.severity == 'caution' %}bg-[#FFB020]{% elif alert.severity == 'critical' %}bg-error{% else %}bg-[#22E3A0]{% endif %} animate-pulse"></span>
+                {{ alert.severity|title }}
+              </span>
+              <span class="text-on-surface-variant font-label-caps text-label-caps uppercase">
+                System: {% if alert.metric == 'sleep' %}Neuro-Circadian{% elif alert.metric == 'cabin_co2' %}Atmospheric ECLSS{% else %}Cardiovascular{% endif %}
+              </span>
+            </div>
+            <h1 class="font-headline-lg text-headline-lg text-primary tracking-tight">
+              {{ alert.title }}
+            </h1>
+            <p class="font-body-md text-body-md text-on-surface-variant">
+              Raised Day {{ alert.mission_day }} · 07:45 · Autonomous Diagnostics Engine
+            </p>
+          </div>
+        </div>
+
+        <div class="flex md:flex-col items-end justify-between md:justify-center gap-space-xs pt-space-xs md:pt-0">
+          <div class="text-left md:text-right">
+            <div class="font-label-caps text-label-caps text-outline uppercase tracking-wider">Current Variance</div>
+            <div class="font-telemetry-metric text-telemetry-metric {% if alert.severity != 'nominal' %}text-error{% else %}text-[#22E3A0]{% endif %} tracking-tight">
+              {{ variance_str }} <span class="font-body-sm text-body-sm text-on-surface-variant">vs BASE</span>
+            </div>
+          </div>
+          <span class="px-space-xs py-0.5 rounded bg-surface-container-high text-on-surface-variant font-label-sm text-label-sm">AUTOCORR: 0.88</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 12-Column Telemetry Grid (7 cols Left / 5 cols Right) -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-gutter-desktop items-start">
+      
+      <!-- LEFT COLUMN (7 Cols) -->
+      <div class="lg:col-span-7 flex flex-col gap-space-md">
+        
+        <!-- Section 1: What changed -->
+        <article class="rounded-xl bg-surface-container/70 backdrop-blur-md p-space-lg shadow-md transition-all hover:bg-surface-container/90 border border-white/5">
+          <div class="flex items-center justify-between pb-space-sm">
+            <div class="flex items-center gap-space-sm">
+              <span class="material-symbols-outlined text-primary-container text-[20px]">troubleshoot</span>
+              <h2 class="font-headline-sm text-headline-sm text-on-surface tracking-wide uppercase">What changed</h2>
+            </div>
+            <span class="font-label-caps text-label-caps text-outline uppercase">Day 139 - {{ alert.mission_day }}</span>
+          </div>
+
+          <p class="font-body-lg text-body-lg text-on-surface-variant leading-relaxed">
+            {{ alert.message }} Today is in your <span class="text-[#FFB020] font-headline-sm">Amber range, 5.0–6.4 h</span>.
+          </p>
+
+          <div class="mt-space-md grid grid-cols-3 gap-space-sm">
+            <div class="p-space-sm rounded-lg bg-surface-container-high">
+              <div class="font-label-caps text-label-caps text-outline uppercase">Latest Value</div>
+              <div class="font-headline-sm text-headline-sm text-on-surface">{{ latest_val }} {{ unit }}</div>
+            </div>
+            <div class="p-space-sm rounded-lg bg-surface-container-high">
+              <div class="font-label-caps text-label-caps text-outline uppercase">4-Day Delta</div>
+              <div class="font-headline-sm text-headline-sm text-error">-20.5%</div>
+            </div>
+            <div class="p-space-sm rounded-lg bg-surface-container-high">
+              <div class="font-label-caps text-label-caps text-outline uppercase">REM Cycle</div>
+              <div class="font-headline-sm text-headline-sm text-on-surface">61 min</div>
+            </div>
+          </div>
+        </article>
+
+        <!-- Section 2: Why it matters -->
+        <article class="rounded-xl bg-surface-container/70 backdrop-blur-md p-space-lg shadow-md transition-all hover:bg-surface-container/90 border border-white/5">
+          <div class="flex items-center justify-between pb-space-sm">
+            <div class="flex items-center gap-space-sm">
+              <span class="material-symbols-outlined text-secondary text-[20px]">psychology</span>
+              <h2 class="font-headline-sm text-headline-sm text-on-surface tracking-wide uppercase">Why it matters</h2>
+            </div>
+            <span class="font-label-caps text-label-caps text-primary-fixed uppercase">Cognitive Risk Index: Low</span>
+          </div>
+          <p class="font-body-lg text-body-lg text-on-surface-variant leading-relaxed">
+            Short sleep can reduce alertness and reaction time, and the effect builds over a long mission. Your <span class="text-on-surface font-headline-sm">HRV (62 ms)</span> and <span class="text-on-surface font-headline-sm">stress (3/10)</span> are still normal.
+          </p>
+          <div class="mt-space-md p-space-sm rounded-lg bg-surface-container-low flex flex-col sm:flex-row gap-space-md sm:items-center justify-between border border-white/5">
+            <div class="flex items-center gap-space-sm">
+              <div class="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center text-primary">
+                <span class="material-symbols-outlined text-[18px]">ecg_heart</span>
+              </div>
+              <div>
+                <div class="font-body-sm text-body-sm text-on-surface-variant">Heart Rate Variability</div>
+                <div class="font-headline-sm text-headline-sm text-on-surface">62 ms <span class="text-primary font-label-caps text-label-caps ml-1">NOMINAL</span></div>
+              </div>
+            </div>
+            <div class="flex items-center gap-space-sm">
+              <div class="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center text-secondary">
+                <span class="material-symbols-outlined text-[18px]">self_improvement</span>
+              </div>
+              <div>
+                <div class="font-body-sm text-body-sm text-on-surface-variant">Neuro-Stress Score</div>
+                <div class="font-headline-sm text-headline-sm text-on-surface">3.0 <span class="text-on-surface-variant font-label-sm text-label-sm">/ 10</span></div>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <!-- Section 3: What to do (Interactive ActionChecklist) -->
+        <article class="rounded-xl bg-surface-container/70 backdrop-blur-md p-space-lg shadow-md transition-all hover:bg-surface-container/90 border border-white/5">
+          <fieldset class="w-full flex flex-col gap-space-md">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-space-sm">
+                <span class="material-symbols-outlined text-primary-container text-[20px]">playlist_add_check</span>
+                <legend class="font-headline-sm text-headline-sm text-on-surface tracking-wide uppercase">What to do</legend>
+              </div>
+              <span class="px-space-sm py-0.5 rounded-full bg-surface-container-high text-primary font-headline-sm text-body-sm" id="action-counter">
+                1 of 3 done
+              </span>
+            </div>
+
+            <div class="flex flex-col gap-space-xs" id="checklist-group">
+              <!-- Item 1 -->
+              <label class="group flex items-center gap-space-md min-h-[44px] p-space-sm rounded-lg bg-surface-container-low hover:bg-surface-container-high cursor-pointer transition-colors border border-white/5">
+                <input checked class="peer hidden" id="check-1" onchange="updateChecklistState()" type="checkbox"/>
+                <div class="w-6 h-6 rounded-lg bg-primary-container flex items-center justify-center text-on-primary-container shrink-0 peer-checked:bg-primary-container peer-[:not(:checked)]:bg-surface-container-high">
+                  <span class="material-symbols-outlined text-[18px] peer-checked:inline peer-[:not(:checked)]:hidden">check</span>
+                </div>
+                <span class="font-body-md text-body-md text-on-surface-variant group-hover:text-on-surface select-none peer-checked:line-through peer-checked:opacity-50">
+                  Dim cabin lights 60 minutes before your sleep period.
+                </span>
+              </label>
+
+              <!-- Item 2 -->
+              <label class="group flex items-center gap-space-md min-h-[44px] p-space-sm rounded-lg bg-surface-container-low hover:bg-surface-container-high cursor-pointer transition-colors border border-white/5">
+                <input class="peer hidden" id="check-2" onchange="updateChecklistState()" type="checkbox"/>
+                <div class="w-6 h-6 rounded-lg bg-surface-container-high flex items-center justify-center text-on-primary-container shrink-0 peer-checked:bg-primary-container peer-[:not(:checked)]:bg-surface-container-high">
+                  <span class="material-symbols-outlined text-[18px] hidden peer-checked:inline">check</span>
+                </div>
+                <span class="font-body-md text-body-md text-on-surface group-hover:text-primary select-none peer-checked:line-through peer-checked:opacity-50">
+                  Avoid caffeine in the 6 hours before sleep.
+                </span>
+              </label>
+
+              <!-- Item 3 -->
+              <label class="group flex items-center gap-space-md min-h-[44px] p-space-sm rounded-lg bg-surface-container-low hover:bg-surface-container-high cursor-pointer transition-colors border border-white/5">
+                <input class="peer hidden" id="check-3" onchange="updateChecklistState()" type="checkbox"/>
+                <div class="w-6 h-6 rounded-lg bg-surface-container-high flex items-center justify-center text-on-primary-container shrink-0 peer-checked:bg-primary-container peer-[:not(:checked)]:bg-surface-container-high">
+                  <span class="material-symbols-outlined text-[18px] hidden peer-checked:inline">check</span>
+                </div>
+                <span class="font-body-md text-body-md text-on-surface group-hover:text-primary select-none peer-checked:line-through peer-checked:opacity-50">
+                  Log your sleep again tomorrow morning.
+                </span>
+              </label>
+            </div>
+          </fieldset>
+        </article>
+
+        <!-- Section 4: When to escalate -->
+        <article class="rounded-xl bg-surface-container/70 backdrop-blur-md p-space-lg shadow-md transition-all hover:bg-surface-container/90 flex flex-col gap-space-md border border-white/5">
+          <div class="flex items-center gap-space-sm">
+            <span class="material-symbols-outlined text-error text-[20px]">fmd_bad</span>
+            <h2 class="font-headline-sm text-headline-sm text-on-surface tracking-wide uppercase">When to escalate</h2>
+          </div>
+          <p class="font-body-lg text-body-lg text-on-surface-variant leading-relaxed">
+            Contact ground support if sleep stays below <span class="text-error font-headline-sm">5.0 h for 2 nights</span>, or if you notice persistent headache, confusion or dizziness.
+          </p>
+          <div class="pt-space-xs">
+            <button class="w-full sm:w-auto inline-flex items-center justify-center gap-space-sm px-space-lg py-space-md rounded-xl font-headline-sm text-headline-sm text-[#0A0E1A] bg-gradient-to-r from-[#FF6B35] to-[#EC4899] shadow-lg hover:opacity-95 active:scale-95 transition-all cursor-pointer font-bold"
+                    onclick="triggerEscalation()"
+                    type="button">
+              <span class="material-symbols-outlined text-[24px]">satellite_alt</span>
+              <span>Contact Ground Support</span>
+            </button>
+          </div>
+        </article>
+
+      </div>
+
+      <!-- RIGHT COLUMN (5 Cols) -->
+      <div class="lg:col-span-5 flex flex-col gap-space-md">
+        
+        <!-- ChartCard: Mini Trend (7 Days) -->
+        <div class="rounded-xl bg-surface-container/70 backdrop-blur-md p-space-lg shadow-md flex flex-col gap-space-md border border-white/5">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-space-sm">
+              <span class="material-symbols-outlined text-primary-container text-[20px]">monitoring</span>
+              <div class="font-headline-sm text-headline-sm text-on-surface">Sleep (7 Days)</div>
+            </div>
+            <span class="font-label-caps text-label-caps text-on-surface-variant uppercase">Units: Hours / Sol</span>
+          </div>
+
+          <div class="relative w-full rounded-lg bg-surface-container-lowest p-space-md flex flex-col gap-space-sm overflow-hidden border border-white/5">
+            <div class="flex items-center justify-between text-label-sm font-label-sm">
+              <div class="flex items-center gap-space-xs text-[#FFB020]">
+                <span class="w-2.5 h-1 bg-[#FFB020] rounded-full inline-block"></span>
+                <span>Amber Range: 5.0 - 6.4 h</span>
+              </div>
+              <div class="flex items-center gap-space-xs text-primary-fixed-dim">
+                <span class="w-3 border-t border-dashed border-primary-fixed-dim inline-block"></span>
+                <span>Baseline: {{ baseline_val }} h</span>
+              </div>
+            </div>
+
+            <!-- Live Chart.js Container -->
+            <div class="relative h-48 w-full">
+              <canvas aria-label="Interactive Chart.js: Sleep trend (7 days)" id="alert-sleep-trend" role="img"></canvas>
+            </div>
+          </div>
+
+          <div class="flex items-center justify-between text-body-sm font-body-sm text-on-surface-variant">
+            <span>7-Day Mean: <strong class="text-on-surface font-headline-sm">{{ mean_val }} h</strong></span>
+            <span>Sleep Deficit: <strong class="text-[#FFB020] font-headline-sm">{{ deficit_str }}</strong></span>
+          </div>
+        </div>
+
+        <!-- Action Status Panel -->
+        <div class="rounded-xl bg-surface-container/70 backdrop-blur-md p-space-lg shadow-md flex flex-col gap-space-md border border-white/5">
+          <div class="flex items-center justify-between">
+            <span class="font-headline-sm text-headline-sm text-on-surface uppercase tracking-wide">Action Status</span>
+            <span class="w-2 h-2 rounded-full bg-primary-container"></span>
+          </div>
+
+          <div class="flex items-start gap-space-sm p-space-sm rounded-lg bg-surface-container-high transition-all" id="notification-banner">
+            <div class="w-6 h-6 rounded-full bg-surface-container flex items-center justify-center text-primary-fixed shrink-0">
+              <span class="material-symbols-outlined text-[16px]">check_circle</span>
+            </div>
+            <div class="flex-1">
+              <div class="flex items-center gap-space-xs">
+                <span class="px-space-xs py-0.5 rounded bg-surface-container text-primary-fixed font-label-caps text-label-caps uppercase">
+                  Action logged
+                </span>
+                <span class="font-label-sm text-label-sm text-on-surface-variant">08:12 UTC</span>
+              </div>
+              <p class="font-body-sm text-body-sm text-on-surface-variant mt-0.5" id="banner-text">
+                Cabin lighting dimmed · Protocol auto-engaged
+              </p>
+            </div>
+          </div>
+
+          <div class="flex flex-col gap-space-sm pt-space-xs">
+            <button class="w-full min-h-[44px] px-space-md py-space-sm rounded-xl font-headline-sm text-headline-sm text-primary-container bg-surface-container-high hover:bg-surface-container-highest active:bg-primary-container active:text-on-primary-container transition-all flex items-center justify-center gap-space-sm shadow-sm cursor-pointer"
+                    onclick="logManualAction()"
+                    type="button">
+              <span class="material-symbols-outlined text-[20px]">done_all</span>
+              <span>Mark action done</span>
+            </button>
+
+            <button class="w-full min-h-[44px] px-space-md py-space-sm rounded-xl font-headline-sm text-headline-sm text-on-surface/80 hover:text-on-surface hover:bg-surface-container-high transition-colors flex items-center justify-center gap-space-sm cursor-pointer"
+                    onclick="openDismissModal()"
+                    type="button">
+              <span class="material-symbols-outlined text-[20px]">notifications_off</span>
+              <span>Dismiss / Acknowledge</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Diagnostic Footnote Telemetry Details -->
+        <div class="p-space-md rounded-xl bg-surface-container-low/60 flex flex-col gap-space-xs text-on-surface-variant border border-white/5">
+          <div class="flex items-center justify-between font-label-caps text-label-caps uppercase text-outline">
+            <span>Bio-Sensor ID</span>
+            <span>POLARIS-BIO-04</span>
+          </div>
+          <div class="flex items-center justify-between font-body-sm text-body-sm">
+            <span>Last Polling Sync</span>
+            <span class="font-headline-sm text-headline-sm text-on-surface">3m ago</span>
+          </div>
+          <div class="flex items-center justify-between font-body-sm text-body-sm">
+            <span>Confidence Value</span>
+            <span class="text-primary font-headline-sm text-headline-sm">96.4%</span>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- Dismiss Confirmation Modal Dialog -->
+    <div class="fixed inset-0 z-50 bg-surface-container-lowest/80 backdrop-blur-md hidden items-center justify-center p-space-md" id="dismiss-modal">
+      <div class="w-full max-w-md rounded-xl bg-surface-container-high p-space-lg shadow-2xl flex flex-col gap-space-md border border-white/10">
+        <div class="flex items-center gap-space-sm text-[#FFB020]">
+          <span class="material-symbols-outlined text-[24px]">warning</span>
+          <h3 class="font-headline-sm text-headline-sm text-on-surface uppercase tracking-wide">Acknowledge &amp; Silence Alert?</h3>
+        </div>
+        <p class="font-body-md text-body-md text-on-surface-variant">
+          Acknowledging this diagnostic signal will update the flight surgeon console and mark it resolved for 24 mission hours. Continuous vital tracking remains active.
+        </p>
+        <div class="flex items-center justify-end gap-space-sm pt-space-sm">
+          <button class="px-space-md py-space-sm rounded-lg text-on-surface-variant hover:text-on-surface font-headline-sm text-headline-sm cursor-pointer"
+                  onclick="closeDismissModal()"
+                  type="button">
+            Cancel
+          </button>
+          <form method="POST" action="{% url 'alerts:acknowledge' alert.id %}">
+            {% csrf_token %}
+            <button class="px-space-md py-space-sm rounded-lg bg-surface-container-highest text-[#FFB020] hover:bg-surface-variant font-headline-sm text-headline-sm cursor-pointer"
+                    type="submit">
+              Confirm Acknowledge
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Escalation Toast / Notice -->
+    <div class="fixed bottom-6 right-6 z-50 rounded-xl bg-surface-container-highest p-space-md shadow-2xl hidden items-center gap-space-md border border-primary/30" id="escalation-toast">
+      <div class="w-10 h-10 rounded-full bg-secondary-container flex items-center justify-center text-primary-container">
+        <span class="material-symbols-outlined text-[20px]">podcasts</span>
+      </div>
+      <div>
+        <div class="font-headline-sm text-headline-sm text-on-surface">Ground Support Signal Queued</div>
+        <div class="font-body-sm text-body-sm text-on-surface-variant">Uplink latency: 18m 42s · Packet ID #MED-8812</div>
+      </div>
+      <button class="text-on-surface-variant hover:text-on-surface p-1 cursor-pointer" onclick="hideEscalationToast()" type="button">
+        <span class="material-symbols-outlined text-[18px]">close</span>
+      </button>
+    </div>
+
+    <!-- Regulatory & Mission Footer -->
+    <footer class="pt-space-xl pb-space-lg text-center flex flex-col items-center gap-space-xs text-outline">
+      <p class="font-body-sm text-body-sm">
+        Prototype for demonstration purposes. Not a medical device.
+      </p>
+      <div class="flex items-center gap-space-md font-label-caps text-label-caps text-on-surface-variant uppercase tracking-widest">
+        <span>Hab Module 2</span>
+        <span>·</span>
+        <span>Bio-Telemetry Build 4.2.1-Orion</span>
+      </div>
+    </footer>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const canvas = document.getElementById('alert-sleep-trend');
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    const labels = {{ chart_labels|safe }};
+    const sleepData = {{ chart_values|safe }};
+    const baseline = {{ baseline_val|stringformat:".1f" }};
+    const cautionLow = {{ caution_low|stringformat:".1f" }};
+
+    // Custom plugin for baseline line and amber caution zone
+    const missionThresholdsPlugin = {
+      id: 'missionThresholds',
+      beforeDraw(chart) {
+        const { ctx, chartArea: { left, right }, scales: { y } } = chart;
+        ctx.save();
+
+        // Shaded caution band 5.0h to 6.4h
+        const yTopCaution = y.getPixelForValue(6.4);
+        const yBottomCaution = y.getPixelForValue(5.0);
+        ctx.fillStyle = 'rgba(255, 176, 32, 0.07)';
+        ctx.fillRect(left, yTopCaution, right - left, yBottomCaution - yTopCaution);
+
+        // Caution threshold dashed line
+        const yCaution = y.getPixelForValue(cautionLow);
+        ctx.beginPath();
+        ctx.setLineDash([4, 4]);
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = 'rgba(255, 176, 32, 0.4)';
+        ctx.moveTo(left, yCaution);
+        ctx.lineTo(right, yCaution);
+        ctx.stroke();
+
+        // Baseline dashed line
+        const yBase = y.getPixelForValue(baseline);
+        ctx.beginPath();
+        ctx.setLineDash([5, 5]);
+        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+        ctx.moveTo(left, yBase);
+        ctx.lineTo(right, yBase);
+        ctx.stroke();
+
+        // Baseline label
+        ctx.fillStyle = 'rgba(0, 240, 255, 0.7)';
+        ctx.font = '10px "Space Grotesk", sans-serif';
+        ctx.fillText(baseline + 'h BASE', left + 6, yBase - 5);
+
+        ctx.restore();
+      }
+    };
+
+    // Neon gradient fill under curve
+    const gradient = ctx.createLinearGradient(0, 0, 0, 180);
+    gradient.addColorStop(0, 'rgba(0, 240, 255, 0.28)');
+    gradient.addColorStop(0.7, 'rgba(255, 176, 32, 0.12)');
+    gradient.addColorStop(1, 'rgba(15, 19, 31, 0)');
+
+    new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: 'Duration (hrs)',
+          data: sleepData,
+          borderColor: function(context) {
+            const chart = context.chart;
+            const { ctx, chartArea } = chart;
+            if (!chartArea) return '#00f0ff';
+            const grad = ctx.createLinearGradient(chartArea.left, 0, chartArea.right, 0);
+            grad.addColorStop(0, '#dbfcff');
+            grad.addColorStop(0.65, '#00f0ff');
+            grad.addColorStop(1, '#FFB020');
+            return grad;
+          },
+          borderWidth: 2.5,
+          tension: 0.35,
+          fill: true,
+          backgroundColor: gradient,
+          pointBackgroundColor: function(context) {
+            const index = context.dataIndex;
+            return index >= 5 ? '#FFB020' : '#00f0ff';
+          },
+          pointBorderColor: '#0a0e1a',
+          pointBorderWidth: 2,
+          pointRadius: function(context) {
+            return context.dataIndex === (sleepData.length - 1) ? 6 : 4;
+          },
+          pointHoverRadius: 7,
+          pointHoverBackgroundColor: '#ffffff',
+          pointHoverBorderColor: function(context) {
+            return context.dataIndex >= 5 ? '#FFB020' : '#00f0ff';
+          },
+          pointHoverBorderWidth: 3
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: {
+          mode: 'index',
+          intersect: false
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: '#1b1f2c',
+            titleColor: '#dfe2f3',
+            titleFont: { family: 'Space Grotesk', size: 12, weight: '700' },
+            bodyColor: '#dbfcff',
+            bodyFont: { family: 'Inter', size: 12 },
+            borderColor: '#3b494b',
+            borderWidth: 1,
+            padding: 10,
+            displayColors: false,
+            callbacks: {
+              label: function(context) {
+                const val = context.parsed.y;
+                const delta = (val - baseline).toFixed(1);
+                const sign = delta > 0 ? '+' : '';
+                return `Reading: ${val} h (${sign}${delta} h vs BASE)`;
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            grid: {
+              color: 'rgba(59, 73, 75, 0.25)',
+              drawBorder: false
+            },
+            ticks: {
+              color: function(ctx) {
+                return ctx.index === (labels.length - 1) ? '#00f0ff' : '#849495';
+              },
+              font: {
+                family: 'Space Grotesk',
+                size: 10,
+                weight: function(ctx) {
+                  return ctx.index === (labels.length - 1) ? '700' : '500';
+                }
+              }
+            }
+          },
+          y: {
+            min: 4.5,
+            max: 8.5,
+            grid: {
+              color: 'rgba(59, 73, 75, 0.25)',
+              drawBorder: false
+            },
+            ticks: {
+              color: '#849495',
+              font: { family: 'Inter', size: 10 },
+              stepSize: 1,
+              callback: function(value) {
+                return value + 'h';
+              }
+            }
+          }
+        }
+      },
+      plugins: [missionThresholdsPlugin]
+    });
+  });
+
+  function updateChecklistState() {
+    const c1 = document.getElementById('check-1');
+    const c2 = document.getElementById('check-2');
+    const c3 = document.getElementById('check-3');
+    const counter = document.getElementById('action-counter');
+    
+    let count = 0;
+    if (c1 && c1.checked) count++;
+    if (c2 && c2.checked) count++;
+    if (c3 && c3.checked) count++;
+
+    if (counter) {
+      counter.textContent = count + ' of 3 done';
+      if (count === 3) {
+        counter.classList.remove('text-primary');
+        counter.classList.add('text-primary-fixed');
+      } else {
+        counter.classList.remove('text-primary-fixed');
+        counter.classList.add('text-primary');
+      }
+    }
+  }
+
+  function logManualAction() {
+    const c2 = document.getElementById('check-2');
+    const c3 = document.getElementById('check-3');
+    if (c2 && !c2.checked) {
+      c2.checked = true;
+    } else if (c3 && !c3.checked) {
+      c3.checked = true;
+    }
+    updateChecklistState();
+
+    const bannerText = document.getElementById('banner-text');
+    if (bannerText) {
+      bannerText.textContent = "Action status verified & logged by Cmdr. Reyes";
+    }
+    const banner = document.getElementById('notification-banner');
+    if (banner) {
+      banner.classList.add('scale-105');
+      setTimeout(() => banner.classList.remove('scale-105'), 300);
+    }
+  }
+
+  function openDismissModal() {
+    const modal = document.getElementById('dismiss-modal');
+    if (modal) {
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+  }
+
+  function closeDismissModal() {
+    const modal = document.getElementById('dismiss-modal');
+    if (modal) {
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+  }
+
+  function triggerEscalation() {
+    const toast = document.getElementById('escalation-toast');
+    if (toast) {
+      toast.classList.remove('hidden');
+      toast.classList.add('flex');
+      setTimeout(() => {
+        toast.classList.add('hidden');
+        toast.classList.remove('flex');
+      }, 7000);
+    }
+  }
+
+  function hideEscalationToast() {
+    const toast = document.getElementById('escalation-toast');
+    if (toast) {
+      toast.classList.add('hidden');
+      toast.classList.remove('flex');
+    }
+  }
+</script>
+{% endblock %}

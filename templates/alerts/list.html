@@ -1,0 +1,220 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Active Alerts &amp; Diagnostic Signals | Space-Pulse{% endblock %}
+
+{% block content %}
+<div class="w-full max-w-7xl mx-auto px-margin sm:px-gutter py-space-lg flex flex-col gap-space-lg">
+
+  <!-- Header Section -->
+  <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-space-md pb-space-sm border-b border-white/5">
+    <div>
+      <div class="flex items-center gap-2 mb-1">
+        <span class="w-2 h-2 rounded-full {% if unacknowledged_count > 0 %}bg-error animate-pulse{% else %}bg-[#22E3A0]{% endif %}"></span>
+        <span class="font-label-caps text-label-caps text-outline uppercase tracking-wider">
+          NASA HRP Autonomous Anomaly Detection Engine
+        </span>
+      </div>
+      <h1 class="font-headline-lg text-headline-lg text-primary tracking-tight">Active Alerts &amp; Diagnostics</h1>
+      <p class="font-body-md text-body-md text-on-surface-variant">
+        Autonomous telemetry evaluation, clinical threshold breaches, and multi-day trend alarms for {{ current_astronaut.full_title }}.
+      </p>
+    </div>
+
+    <!-- Batch Actions -->
+    <div class="flex items-center gap-space-sm">
+      {% if unacknowledged_count > 0 %}
+      <form method="POST" action="{% url 'alerts:acknowledge_all' %}">
+        {% csrf_token %}
+        <button type="submit"
+                class="px-space-md py-space-xs rounded-xl bg-surface-container-high hover:bg-surface-container-highest text-on-surface text-body-sm font-semibold flex items-center gap-2 border border-white/5 transition-all">
+          <span class="material-symbols-outlined text-[18px]">done_all</span>
+          Acknowledge All ({{ unacknowledged_count }})
+        </button>
+      </form>
+      {% endif %}
+      <a href="{% url 'telemetry:history' %}"
+         class="px-space-md py-space-xs rounded-xl bg-surface-container-high hover:bg-surface-container-highest text-on-surface text-body-sm font-semibold flex items-center gap-2 border border-white/5 transition-all">
+        <span class="material-symbols-outlined text-[18px]">monitoring</span>
+        View History Trends
+      </a>
+    </div>
+  </div>
+
+  <!-- KPI Alarm Summary Cards (4-column HUD grid) -->
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-space-md">
+    <!-- 1. Total Signals -->
+    <div class="p-space-md rounded-xl bg-surface-container/70 backdrop-blur-md border border-white/5 shadow-md flex flex-col justify-between">
+      <span class="font-label-caps text-label-caps text-outline uppercase">Total Alarms</span>
+      <div class="flex items-baseline justify-between mt-2">
+        <span class="font-headline-lg text-2xl text-primary font-bold">{{ total_count }}</span>
+        <span class="material-symbols-outlined text-outline text-[20px]">notifications</span>
+      </div>
+      <div class="font-body-sm text-xs text-on-surface-variant mt-1">Autonomous evaluation records</div>
+    </div>
+
+    <!-- 2. Critical Alarms -->
+    <div class="p-space-md rounded-xl bg-surface-container/70 backdrop-blur-md border border-white/5 shadow-md flex flex-col justify-between">
+      <span class="font-label-caps text-label-caps text-outline uppercase">Critical Severity</span>
+      <div class="flex items-baseline justify-between mt-2">
+        <span class="font-headline-lg text-2xl text-error font-bold">{{ critical_count }}</span>
+        <span class="material-symbols-outlined text-error text-[20px]">dangerous</span>
+      </div>
+      <div class="font-body-sm text-xs text-on-surface-variant mt-1">Immediate protocol escalation</div>
+    </div>
+
+    <!-- 3. Caution Warnings -->
+    <div class="p-space-md rounded-xl bg-surface-container/70 backdrop-blur-md border border-white/5 shadow-md flex flex-col justify-between">
+      <span class="font-label-caps text-label-caps text-outline uppercase">Caution Warnings</span>
+      <div class="flex items-baseline justify-between mt-2">
+        <span class="font-headline-lg text-2xl text-[#FFB020] font-bold">{{ caution_count }}</span>
+        <span class="material-symbols-outlined text-[#FFB020] text-[20px]">warning</span>
+      </div>
+      <div class="font-body-sm text-xs text-on-surface-variant mt-1">Active trend deviations</div>
+    </div>
+
+    <!-- 4. Unacknowledged -->
+    <div class="p-space-md rounded-xl bg-surface-container/70 backdrop-blur-md border border-white/5 shadow-md flex flex-col justify-between">
+      <span class="font-label-caps text-label-caps text-outline uppercase">Awaiting Action</span>
+      <div class="flex items-baseline justify-between mt-2">
+        <span class="font-headline-lg text-2xl {% if unacknowledged_count > 0 %}text-error animate-pulse{% else %}text-[#22E3A0]{% endif %} font-bold">
+          {{ unacknowledged_count }}
+        </span>
+        <span class="material-symbols-outlined {% if unacknowledged_count > 0 %}text-error{% else %}text-[#22E3A0]{% endif %} text-[20px]">
+          {% if unacknowledged_count > 0 %}pending_actions{% else %}check_circle{% endif %}
+        </span>
+      </div>
+      <div class="font-body-sm text-xs text-on-surface-variant mt-1">Requires crew confirmation</div>
+    </div>
+  </div>
+
+  <!-- Filter & Controls Toolbar -->
+  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-space-md p-space-sm rounded-xl bg-surface-container/70 backdrop-blur-md border border-white/5">
+    
+    <!-- Severity Filters -->
+    <div class="flex items-center gap-space-xs flex-wrap">
+      <span class="font-label-caps text-xs text-outline uppercase mr-2 hidden sm:inline">Severity:</span>
+      <a href="?severity=all{% if selected_status != 'all' %}&status={{ selected_status }}{% endif %}"
+         class="px-space-md py-1 rounded-lg text-xs font-headline-sm transition-all {% if selected_severity == 'all' %}bg-primary-container text-on-primary-container font-bold shadow-[0_0_8px_rgba(0,240,255,0.2)]{% else %}text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high{% endif %}">
+        All Severities
+      </a>
+      <a href="?severity=critical{% if selected_status != 'all' %}&status={{ selected_status }}{% endif %}"
+         class="px-space-md py-1 rounded-lg text-xs font-headline-sm transition-all {% if selected_severity == 'critical' %}bg-error-container text-on-error-container font-bold shadow-[0_0_8px_rgba(255,77,109,0.2)]{% else %}text-error hover:bg-error-container/20{% endif %}">
+        Critical ({{ critical_count }})
+      </a>
+      <a href="?severity=caution{% if selected_status != 'all' %}&status={{ selected_status }}{% endif %}"
+         class="px-space-md py-1 rounded-lg text-xs font-headline-sm transition-all {% if selected_severity == 'caution' %}bg-[#FFB020]/20 text-[#FFB020] font-bold border border-[#FFB020]/40 shadow-[0_0_8px_rgba(255,176,32,0.2)]{% else %}text-[#FFB020] hover:bg-[#FFB020]/10{% endif %}">
+        Caution ({{ caution_count }})
+      </a>
+      <a href="?severity=nominal{% if selected_status != 'all' %}&status={{ selected_status }}{% endif %}"
+         class="px-space-md py-1 rounded-lg text-xs font-headline-sm transition-all {% if selected_severity == 'nominal' %}bg-[#22E3A0]/20 text-[#22E3A0] font-bold border border-[#22E3A0]/40 shadow-[0_0_8px_rgba(34,227,160,0.2)]{% else %}text-[#22E3A0] hover:bg-[#22E3A0]/10{% endif %}">
+        Nominal ({{ nominal_count }})
+      </a>
+    </div>
+
+    <!-- Status Filters (Active vs Acknowledged) -->
+    <div class="flex items-center gap-space-xs self-start sm:self-auto">
+      <span class="font-label-caps text-xs text-outline uppercase mr-2 hidden sm:inline">Status:</span>
+      <div class="inline-flex p-0.5 rounded-lg bg-surface-container-high border border-white/5 text-xs font-label-caps">
+        <a href="?status=all{% if selected_severity != 'all' %}&severity={{ selected_severity }}{% endif %}"
+           class="px-2.5 py-1 rounded-md transition-all {% if selected_status == 'all' %}bg-primary-container text-on-primary-container font-bold{% else %}text-on-surface-variant hover:text-on-surface{% endif %}">
+          All
+        </a>
+        <a href="?status=active{% if selected_severity != 'all' %}&severity={{ selected_severity }}{% endif %}"
+           class="px-2.5 py-1 rounded-md transition-all {% if selected_status == 'active' %}bg-primary-container text-on-primary-container font-bold{% else %}text-on-surface-variant hover:text-on-surface{% endif %}">
+          Active
+        </a>
+        <a href="?status=acknowledged{% if selected_severity != 'all' %}&severity={{ selected_severity }}{% endif %}"
+           class="px-2.5 py-1 rounded-md transition-all {% if selected_status == 'acknowledged' %}bg-primary-container text-on-primary-container font-bold{% else %}text-on-surface-variant hover:text-on-surface{% endif %}">
+          Acknowledged
+        </a>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Alerts List Feed -->
+  <div class="flex flex-col gap-space-md">
+    {% for alert in alerts %}
+    <div class="p-space-lg rounded-xl bg-surface-container/70 backdrop-blur-md border border-white/5 shadow-xl flex flex-col md:flex-row md:items-center md:justify-between gap-space-md {{ alert.border_accent }} hover:border-primary-container/30 transition-all">
+      
+      <!-- Left: Metric Icon & Alert Details -->
+      <div class="flex items-start gap-space-md flex-1">
+        <div class="w-12 h-12 rounded-xl bg-surface-container-high flex items-center justify-center text-primary-container border border-white/5 shrink-0 mt-0.5 shadow-sm">
+          <span class="material-symbols-outlined text-[24px]">{{ alert.icon }}</span>
+        </div>
+
+        <div class="flex flex-col gap-1 flex-1">
+          <div class="flex items-center gap-space-sm flex-wrap">
+            <span class="px-2.5 py-0.5 rounded-full text-xs font-bold {{ alert.badge_bg }} {{ alert.badge_text }}">
+              {{ alert.severity_label|upper }}
+            </span>
+            <span class="font-headline-sm text-xs font-semibold text-outline uppercase tracking-wider">
+              {{ alert.metric_label }}
+            </span>
+            <span class="text-outline text-xs">·</span>
+            <span class="font-mono text-xs text-primary">
+              Day {{ alert.mission_day }}
+              {% if alert.is_today %}
+              <span class="ml-1 px-1.5 py-0.2 rounded text-[10px] bg-primary-container/20 text-primary-container uppercase font-bold">Today</span>
+              {% endif %}
+            </span>
+            <span class="text-outline text-xs">·</span>
+            <span class="font-mono text-xs text-outline">
+              {{ alert.timestamp|date:"Y-m-d H:i" }} UTC
+            </span>
+          </div>
+
+          <h3 class="font-headline-md text-base text-primary font-bold tracking-tight">
+            {{ alert.title }}
+          </h3>
+
+          <p class="font-body-md text-sm text-on-surface-variant leading-relaxed">
+            {{ alert.message }}
+          </p>
+        </div>
+      </div>
+
+      <!-- Right: Action Buttons & Acknowledge Status -->
+      <div class="flex items-center gap-space-sm shrink-0 self-end md:self-center">
+        {% if alert.acknowledged %}
+        <div class="flex items-center gap-1.5 px-space-sm py-1 rounded-lg bg-[#22E3A0]/10 text-[#22E3A0] border border-[#22E3A0]/20 text-xs font-label-caps">
+          <span class="material-symbols-outlined text-[16px]">check_circle</span>
+          <span>Acknowledged</span>
+        </div>
+        {% else %}
+        <form method="POST" action="{% url 'alerts:acknowledge' alert.id %}">
+          {% csrf_token %}
+          <button type="submit"
+                  class="px-space-md py-space-xs rounded-xl bg-surface-container-high hover:bg-surface-container-highest text-on-surface text-body-sm font-semibold flex items-center gap-1.5 border border-white/5 transition-all">
+            <span class="material-symbols-outlined text-[16px] text-outline">done</span>
+            Acknowledge
+          </button>
+        </form>
+        {% endif %}
+
+        <a href="{% url 'alerts:detail' alert.id %}"
+           class="px-space-md py-space-xs rounded-xl bg-primary-container text-on-primary-container font-headline-sm text-body-sm font-bold flex items-center gap-1.5 shadow-[0_0_12px_rgba(0,240,255,0.2)] hover:scale-105 transition-transform">
+          <span>Diagnostic Pod</span>
+          <span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+        </a>
+      </div>
+
+    </div>
+    {% empty %}
+    <div class="p-space-xl rounded-xl bg-surface-container/70 backdrop-blur-md border border-white/5 shadow-xl text-center flex flex-col items-center justify-center gap-space-sm">
+      <div class="w-14 h-14 rounded-2xl bg-nominal/15 text-nominal flex items-center justify-center shadow-[0_0_20px_rgba(34,227,160,0.2)]">
+        <span class="material-symbols-outlined text-[32px]">verified_user</span>
+      </div>
+      <h3 class="font-headline-md text-lg text-primary font-bold">
+        All Telemetry Systems Nominal
+      </h3>
+      <p class="font-body-md text-sm text-on-surface-variant max-w-md">
+        No active alarms or clinical alerts match your current filter criteria. Vital biometrics and habitat parameters remain stable.
+      </p>
+    </div>
+    {% endfor %}
+  </div>
+
+</div>
+{% endblock %}
