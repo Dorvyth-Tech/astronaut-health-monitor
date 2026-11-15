@@ -15,6 +15,7 @@ from django.test import SimpleTestCase, TestCase
 from core import rules
 from core.constants import EXERCISE_WEEKLY_PLAN_MINUTES
 from core.models import AstronautProfile, Baseline
+from core.alert_texts import message_for, title_for
 from core.services import (
     STATUS_TO_SEVERITY,
     SEVERITY_TO_STATUS,
@@ -259,7 +260,8 @@ class DatabaseWiringTests(TestCase):
         sync_alerts_for_astronaut(self.astro)
         alert = Alert.objects.get(astronaut=self.astro, metric='sleep')
         self.assertEqual(alert.severity, 'caution')
-        self.assertIn('below baseline for 3 nights', alert.message)
+        self.assertEqual(alert.title, title_for('sleep', 'amber'))
+        self.assertEqual(alert.message, message_for('sleep', 'amber'))
 
     def test_sync_twice_does_not_duplicate_an_active_alert(self):
         self.add_sleep([6.0, 5.9, 5.8])
@@ -320,9 +322,8 @@ class DatabaseWiringTests(TestCase):
         sync_alerts_for_astronaut(self.astro)
         alert = Alert.objects.get(astronaut=self.astro, metric='mood')
         self.assertEqual(alert.severity, 'caution')
-        self.assertEqual(alert.title, 'Mood caution')
-        self.assertIn('Mood 1.3 points below baseline for 3 days', alert.message)
-        self.assertIn('Your baseline is 4.3 /5', alert.message)
+        self.assertEqual(alert.title, title_for('mood', 'amber'))
+        self.assertEqual(alert.message, message_for('mood', 'amber'))
 
     def test_mood_alert_is_not_duplicated_while_unacknowledged(self):
         Baseline.objects.create(astronaut=self.astro, metric='mood', baseline_value=4.3)

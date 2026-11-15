@@ -11,6 +11,7 @@ from core.models import Baseline
 from telemetry.models import Reading
 from core.constants import METRIC_CONFIG
 from core.services import sync_alerts_for_astronaut, amber_edges, get_baselines
+from core.alert_texts import parts_for
 
 
 def alerts_list(request):
@@ -146,6 +147,7 @@ def alert_detail(request, alert_id):
         'active_nav': 'alerts',
         'current_astronaut': astronaut,
         'alert': alert,
+        'alert_copy': parts_for(alert.metric, alert.severity),
         'chart_labels': chart_labels,
         'chart_values': chart_values,
         'baseline_val': baseline_val,

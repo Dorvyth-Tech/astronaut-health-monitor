@@ -511,12 +511,16 @@ class Command(BaseCommand):
         result = evaluate_metric_status('resting_hr', readings_to_series('resting_hr', hr_rows), hr_baseline)
         if result['status'] != 'caution':
             raise CommandError(f"Scenario expects an amber heart-rate episode on day 130, got {result['status']}.")
+        from core.alert_texts import message_for, title_for
+
         Alert.objects.create(
             astronaut=cmdr,
             metric='resting_hr',
             severity='caution',
-            title=f"{result['display_label']} caution",
-            message=f"{result['reason']} Your baseline is {hr_baseline:.1f} {result['unit']}.",
+            title=title_for('resting_hr', 'caution') or f"{result['display_label']} caution",
+            message=message_for('resting_hr', 'caution') or (
+                f"{result['reason']} Your baseline is {hr_baseline:.1f} {result['unit']}."
+            ),
             mission_day=130,
             timestamp=hr_rows[-1][1],
             acknowledged=True,
