@@ -1,0 +1,108 @@
+{% comment %}
+  Clickable body map. Rendered by {% body_figure metric_cards %} (core/templatetags/body_figure.py).
+  Hand-made SVG. Colours come from each indicator's existing status; the status is always also
+  written as text in the list, so colour is never the only signal. No NASA marks, no generated images.
+{% endcomment %}
+{% if regions %}
+<section aria-labelledby="body-map-title"
+         class="w-full p-space-lg rounded-xl bg-surface-container/70 backdrop-blur-md shadow-xl flex flex-col gap-space-md border border-white/5"
+         id="body-map">
+  <style>
+    #body-map .bf-region { cursor: pointer; outline: none; }
+    #body-map .bf-shape { stroke-width: 2; transition: fill-opacity .15s, stroke-width .15s; }
+    #body-map .bf-halo { fill: none; stroke-width: 9; stroke-opacity: .45; stroke-linejoin: round; }
+    #body-map [data-status="nominal"] { --bf: #22E3A0; }
+    #body-map [data-status="caution"] { --bf: #FFB020; }
+    #body-map [data-status="critical"] { --bf: #ffb4ab; }
+    #body-map [data-status="no_data"] { --bf: #849495; }
+    #body-map .bf-shape { fill: var(--bf); fill-opacity: .22; stroke: var(--bf); }
+    #body-map .bf-halo { stroke: var(--bf); }
+    #body-map [data-status="no_data"] .bf-shape { stroke-dasharray: 4 3; fill-opacity: .1; }
+    #body-map .bf-region:hover .bf-shape { fill-opacity: .42; }
+    #body-map .bf-region:focus-visible .bf-shape { fill-opacity: .5; stroke: #dbfcff; stroke-width: 4; }
+    #body-map .bf-region:focus-visible .bf-halo { stroke: #dbfcff; stroke-opacity: .8; }
+    @media (prefers-reduced-motion: reduce) { #body-map .bf-shape { transition: none; } }
+  </style>
+
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-space-xs">
+    <div class="flex items-center gap-space-xs">
+      <span aria-hidden="true" class="material-symbols-outlined text-primary-container text-[20px]">accessibility_new</span>
+      <h2 class="font-headline-sm text-headline-sm text-on-surface font-semibold" id="body-map-title">Body map</h2>
+    </div>
+    <p class="font-label-sm text-label-sm text-on-surface-variant">Select a region to jump to its indicator card. Colours repeat each indicator&rsquo;s status. Simulated crew data.</p>
+  </div>
+
+  <div class="flex flex-col md:flex-row items-center md:items-start gap-space-lg">
+    <svg class="w-44 sm:w-52 shrink-0 h-auto" viewBox="0 0 200 410" xmlns="http://www.w3.org/2000/svg" role="group" aria-label="Body map. Four regions, each a link to an indicator card.">
+      <defs>
+        <circle id="bf-head" cx="100" cy="38" r="28"/>
+        <path id="bf-chest" d="M64 86 Q100 76 136 86 L132 152 Q100 160 68 152 Z"/>
+        <path id="bf-abdomen" d="M68 158 Q100 166 132 158 L136 210 Q100 226 64 210 Z"/>
+        <rect id="bf-neck" x="91" y="64" width="18" height="16" rx="5"/>
+        <rect id="bf-arm-l" x="30" y="92" width="22" height="108" rx="11" transform="rotate(9 41 92)"/>
+        <rect id="bf-arm-r" x="148" y="92" width="22" height="108" rx="11" transform="rotate(-9 159 92)"/>
+        <rect id="bf-leg-l" x="66" y="214" width="32" height="182" rx="14"/>
+        <rect id="bf-leg-r" x="102" y="214" width="32" height="182" rx="14"/>
+      </defs>
+
+      {% if by_id.skin %}{% with r=by_id.skin %}
+      <a class="bf-region" data-status="{{ r.status }}" data-region="skin" href="#metric-{{ r.first_key }}"
+         aria-label="{{ r.label }}: {{ r.indicators }}. {{ r.status_label }}. Go to the card.">
+        <title>{{ r.label }} ({{ r.indicators }}): {{ r.status_label }}</title>
+        <g class="bf-halo"><use href="#bf-head"/><use href="#bf-chest"/><use href="#bf-arm-l"/><use href="#bf-arm-r"/><use href="#bf-leg-l"/><use href="#bf-leg-r"/></g>
+        <g class="bf-shape"><use href="#bf-neck"/><use href="#bf-abdomen"/></g>
+      </a>
+      {% endwith %}{% endif %}
+
+      {% if by_id.limbs %}{% with r=by_id.limbs %}
+      <a class="bf-region" data-status="{{ r.status }}" data-region="limbs" href="#metric-{{ r.first_key }}"
+         aria-label="{{ r.label }}: {{ r.indicators }}. {{ r.status_label }}. Go to the card.">
+        <title>{{ r.label }} ({{ r.indicators }}): {{ r.status_label }}</title>
+        <g class="bf-shape"><use href="#bf-arm-l"/><use href="#bf-arm-r"/><use href="#bf-leg-l"/><use href="#bf-leg-r"/></g>
+      </a>
+      {% endwith %}{% endif %}
+
+      {% if by_id.chest %}{% with r=by_id.chest %}
+      <a class="bf-region" data-status="{{ r.status }}" data-region="chest" href="#metric-{{ r.first_key }}"
+         aria-label="{{ r.label }}: {{ r.indicators }}. {{ r.status_label }}. Go to the first card.">
+        <title>{{ r.label }} ({{ r.indicators }}): {{ r.status_label }}</title>
+        <g class="bf-shape"><use href="#bf-chest"/></g>
+      </a>
+      {% endwith %}{% endif %}
+
+      {% if by_id.head %}{% with r=by_id.head %}
+      <a class="bf-region" data-status="{{ r.status }}" data-region="head" href="#metric-{{ r.first_key }}"
+         aria-label="{{ r.label }}: {{ r.indicators }}. {{ r.status_label }}. Go to the first card.">
+        <title>{{ r.label }} ({{ r.indicators }}): {{ r.status_label }}</title>
+        <g class="bf-shape"><use href="#bf-head"/></g>
+      </a>
+      {% endwith %}{% endif %}
+    </svg>
+
+    <ul class="w-full grid grid-cols-1 sm:grid-cols-2 gap-space-sm">
+      {% for r in regions %}
+      <li class="p-space-sm rounded-lg bg-surface-container-low border border-white/5 flex flex-col gap-space-xs">
+        <span class="font-label-caps text-label-caps text-outline uppercase tracking-wider">{{ r.label }}</span>
+        <ul class="flex flex-col gap-1">
+          {% for c in r.cards %}
+          <li>
+            <a class="flex items-center justify-between gap-space-sm min-h-[44px] px-space-sm rounded-lg hover:bg-surface-container-high focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-container transition-colors"
+               href="#metric-{{ c.key }}">
+              <span class="flex flex-col">
+                <span class="font-body-md text-body-md text-on-surface">{{ c.label }}</span>
+                <span class="font-label-sm text-label-sm text-on-surface-variant">{% if c.has_data %}{{ c.value }}{% else %}No data yet{% endif %}</span>
+              </span>
+              <span class="shrink-0 inline-flex items-center gap-1.5 px-space-sm py-0.5 rounded-full bg-surface-container-highest font-label-caps text-label-caps uppercase {% if c.status == 'critical' %}text-error{% elif c.status == 'caution' %}text-[#FFB020]{% elif c.status == 'nominal' %}text-[#22E3A0]{% else %}text-on-surface-variant{% endif %}">
+                <span aria-hidden="true" class="w-2 h-2 rounded-full {% if c.status == 'critical' %}bg-error{% elif c.status == 'caution' %}bg-[#FFB020]{% elif c.status == 'nominal' %}bg-[#22E3A0]{% else %}bg-outline{% endif %}"></span>{{ c.status_label }}
+              </span>
+            </a>
+          </li>
+          {% endfor %}
+        </ul>
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+  <p class="font-label-sm text-label-sm text-outline">Not a medical device. A map of the indicators already on this page, not a diagnosis.</p>
+</section>
+{% endif %}

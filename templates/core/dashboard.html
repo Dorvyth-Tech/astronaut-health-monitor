@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load ground_panel body_figure %}
 
 {% block title %}Dashboard | Space-Pulse HUD{% endblock %}
 
@@ -127,7 +128,7 @@
 
       <div class="flex gap-space-sm overflow-x-auto pb-space-sm pt-space-xs snap-x no-scrollbar">
         {% for card in metric_cards %}
-        <div class="min-w-[170px] flex-1 snap-start p-space-md rounded-xl transition-all flex flex-col justify-between shadow-md border {% if card.is_caution %}bg-[rgba(255,176,32,0.08)] border-[#FFB020]/30 shadow-[0_0_16px_rgba(255,176,32,0.18)] hover:bg-[rgba(255,176,32,0.12)]{% elif card.is_critical %}bg-error-container/20 border-error/40 shadow-[0_0_16px_rgba(255,77,109,0.2)]{% else %}bg-surface-container/60 border-white/5 hover:bg-surface-container-high{% endif %}">
+        <div id="metric-{{ card.key }}" tabindex="-1" class="scroll-mt-24 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-container min-w-[170px] flex-1 snap-start p-space-md rounded-xl transition-all flex flex-col justify-between shadow-md border {% if card.is_caution %}bg-[rgba(255,176,32,0.08)] border-[#FFB020]/30 shadow-[0_0_16px_rgba(255,176,32,0.18)] hover:bg-[rgba(255,176,32,0.12)]{% elif card.is_critical %}bg-error-container/20 border-error/40 shadow-[0_0_16px_rgba(255,77,109,0.2)]{% else %}bg-surface-container/60 border-white/5 hover:bg-surface-container-high{% endif %}">
           <div class="flex items-center justify-between">
             <span class="material-symbols-outlined text-[20px] {% if card.is_caution %}text-[#FFB020]{% elif card.is_critical %}text-error{% else %}text-primary-container{% endif %}">
               {{ card.icon }}
@@ -293,6 +294,12 @@
       </div>
 
     </div>
+
+    <!-- ROW 3b: Ground is ~20 minutes away (only when there is an active caution/critical alert) -->
+    {% ground_delay_panel alerts=active_alerts link=True %}
+
+    <!-- ROW 3c: Clickable body map (links to the indicator cards above) -->
+    {% body_figure metric_cards %}
 
     <!-- ROW 4: Risk Panel (8 cols, 2x2 tiles) + Quick Actions (4 cols) -->
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-space-lg">

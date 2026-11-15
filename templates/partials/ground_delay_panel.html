@@ -1,0 +1,211 @@
+{% comment %}
+  "Ground is ~20 minutes away" panel. Rendered by {% ground_delay_panel %} (core/templatetags/ground_panel.py).
+  Wording of the four steps is the verbatim Science Lead alert text. The uplink and countdown are a
+  SIMULATION kept in the browser (sessionStorage): nothing is sent or saved.
+{% endcomment %}
+{% if panel %}
+<section aria-labelledby="ground-panel-title"
+         class="w-full rounded-xl bg-surface-container/70 backdrop-blur-md p-space-lg shadow-xl relative overflow-hidden border border-white/5"
+         data-ground-panel
+         data-alert-id="{{ panel.alert.id }}"
+         data-one-way-min="{{ panel.one_way_min }}"
+         data-one-way-max="{{ panel.one_way_max }}"
+         data-sent-at="{{ panel.sent_at }}"
+         id="ground-panel">
+  <div class="absolute -left-16 -top-24 w-72 h-72 rounded-full bg-secondary-container/15 blur-3xl pointer-events-none"></div>
+
+  <div class="relative z-10 flex flex-col gap-space-lg">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-start justify-between gap-space-sm">
+      <div class="flex items-start gap-space-md">
+        <div class="w-12 h-12 rounded-xl bg-surface-container-high flex items-center justify-center text-primary-container shadow-md shrink-0">
+          <span aria-hidden="true" class="material-symbols-outlined text-[28px]">satellite_alt</span>
+        </div>
+        <div class="flex flex-col gap-space-xs">
+          <h2 class="font-headline-md text-headline-md text-primary tracking-tight" id="ground-panel-title">Ground is ~20 minutes away</h2>
+          <p class="font-body-md text-body-md text-on-surface-variant">
+            A message to the flight surgeon takes {{ panel.one_way_min }}&ndash;{{ panel.one_way_max }} minutes one way, so the first steps are yours.
+            Flag: <strong class="text-on-surface font-semibold">{{ panel.indicator }}</strong>
+            <span class="inline-flex items-center gap-1 ml-1 px-space-sm py-0.5 rounded-full bg-surface-container-highest font-label-caps text-label-caps uppercase tracking-wider {% if panel.severity == 'critical' %}text-error{% else %}text-[#FFB020]{% endif %}">
+              <span aria-hidden="true" class="w-2 h-2 rounded-full {% if panel.severity == 'critical' %}bg-error{% else %}bg-[#FFB020]{% endif %}"></span>{{ panel.severity|title }}
+            </span>
+          </p>
+        </div>
+      </div>
+      <span class="self-start inline-flex items-center gap-1.5 px-space-sm py-0.5 rounded-full bg-surface-container-high text-on-surface-variant font-label-caps text-label-caps uppercase tracking-wider shrink-0">
+        <span aria-hidden="true" class="material-symbols-outlined text-[14px] text-primary-container">science</span>
+        Simulated uplink &middot; estimate
+      </span>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-gutter items-start">
+
+      <!-- A. Act now on board -->
+      <div class="lg:col-span-5 flex flex-col gap-space-sm">
+        <h3 class="font-headline-sm text-headline-sm text-on-surface tracking-wide uppercase flex items-center gap-space-sm">
+          <span aria-hidden="true" class="material-symbols-outlined text-primary-container text-[20px]">checklist</span>
+          Act now on board
+        </h3>
+        <ol class="flex flex-col gap-space-xs">
+          {% for step in panel.steps %}
+          <li class="flex items-start gap-space-sm p-space-sm rounded-lg bg-surface-container-low border border-white/5 {% if step.key == 'action' %}ring-1 ring-primary-container/40{% endif %}">
+            <span aria-hidden="true" class="w-6 h-6 rounded-full bg-surface-container-high flex items-center justify-center font-label-caps text-label-caps text-primary-container shrink-0">{{ forloop.counter }}</span>
+            <div class="flex flex-col">
+              <span class="font-label-caps text-label-caps uppercase tracking-wider {% if step.key == 'escalate' %}text-error{% else %}text-on-surface-variant{% endif %}">{{ step.label }}</span>
+              <span class="font-body-md text-body-md text-on-surface">{{ step.text }}</span>
+            </div>
+          </li>
+          {% endfor %}
+        </ol>
+      </div>
+
+      <!-- B. Packet to flight surgeon -->
+      <div class="lg:col-span-4 flex flex-col gap-space-sm">
+        <h3 class="font-headline-sm text-headline-sm text-on-surface tracking-wide uppercase flex items-center gap-space-sm">
+          <span aria-hidden="true" class="material-symbols-outlined text-secondary text-[20px]">outbox</span>
+          Packet to flight surgeon
+        </h3>
+        <div class="rounded-lg bg-surface-container-lowest p-space-md border border-white/5 flex flex-col gap-space-sm">
+          <div class="flex items-center justify-between gap-space-sm">
+            <span class="font-label-caps text-label-caps text-outline uppercase tracking-wider">Auto-drafted summary</span>
+            {% if panel.packet_id %}<span class="font-label-caps text-label-caps text-on-surface-variant">#{{ panel.packet_id }}</span>{% endif %}
+          </div>
+          <ul class="flex flex-col gap-1 font-body-sm text-body-sm text-on-surface">
+            {% for line in panel.summary %}<li>{{ line }}</li>{% endfor %}
+          </ul>
+          <div class="pt-space-sm border-t border-white/5 flex flex-col gap-space-sm">
+            <div class="flex flex-col gap-space-xs">
+              <span class="font-label-caps text-label-caps text-outline uppercase tracking-wider">Sent at</span>
+              <span class="font-headline-sm text-headline-sm text-on-surface" data-sent-label>Not sent (simulated uplink)</span>
+            </div>
+            <button type="button" data-queue-btn
+                    class="hidden w-full min-h-[44px] px-space-md py-space-sm rounded-xl font-headline-sm text-headline-sm text-primary-container bg-surface-container-high hover:bg-surface-container-highest focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-container transition-all flex items-center justify-center gap-space-sm shadow-sm cursor-pointer">
+              <span aria-hidden="true" class="material-symbols-outlined text-[20px]">send</span>
+              <span>Queue packet (simulated uplink)</span>
+            </button>
+            <button type="button" data-reset-btn
+                    class="hidden self-start min-h-[44px] px-space-sm font-label-sm text-label-sm text-on-surface-variant hover:text-on-surface underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-container cursor-pointer">
+              Clear simulated send
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- C. Reply-expected countdown -->
+      <div class="lg:col-span-3 flex flex-col gap-space-sm">
+        <h3 class="font-headline-sm text-headline-sm text-on-surface tracking-wide uppercase flex items-center gap-space-sm">
+          <span aria-hidden="true" class="material-symbols-outlined text-primary-container text-[20px]">timer</span>
+          Reply expected
+        </h3>
+        <div class="rounded-lg bg-surface-container-lowest p-space-md border border-white/5 flex flex-col gap-space-sm">
+          <div class="font-body-sm text-body-sm text-on-surface-variant">
+            Round trip <strong class="text-on-surface font-semibold">{{ panel.round_trip_min }}&ndash;{{ panel.round_trip_max }} min</strong>
+            after sending (one-way light delay {{ panel.one_way_min }}&ndash;{{ panel.one_way_max }} min, NASA range; light time only, estimate).
+          </div>
+          <div class="font-telemetry-metric text-telemetry-metric text-on-surface tabular-nums" role="timer" aria-label="Time until earliest expected reply" data-count>--:--</div>
+          <div class="font-label-sm text-label-sm text-on-surface-variant" data-count-caption>
+            Starts when the packet is queued. Without JavaScript, expect the reply {{ panel.round_trip_min }}&ndash;{{ panel.round_trip_max }} min after sending.
+          </div>
+          <div class="font-body-sm text-body-sm text-on-surface" data-window></div>
+          <p class="sr-only" role="status" aria-live="polite" data-announce></p>
+          {% if comm_latency %}
+          <div class="pt-space-sm border-t border-white/5 font-label-sm text-label-sm text-on-surface-variant">
+            Demo link now: {{ comm_latency }} one way (simulated).
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    {% if show_link %}
+    <div>
+      <a class="inline-flex items-center justify-center h-11 px-space-md rounded-lg bg-surface-container-high text-primary-container font-headline-sm text-headline-sm hover:bg-surface-container-highest focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-container transition-all"
+         href="{% url 'alerts:detail' panel.alert.id %}">
+        <span>Open alert detail</span>
+        <span aria-hidden="true" class="material-symbols-outlined text-[16px] ml-1">chevron_right</span>
+      </a>
+    </div>
+    {% endif %}
+
+    <p class="font-label-sm text-label-sm text-outline">
+      Simulated crew data. The 3&ndash;22 min range is the NASA one-way delay for Mars distances; the real delay changes with the planets&rsquo; positions. Rule-based flag, not a diagnosis. Not a medical device.
+    </p>
+  </div>
+</section>
+
+<script>
+(function () {
+  var root = document.querySelector('[data-ground-panel]');
+  if (!root) return;
+  var oneWayMin = parseFloat(root.dataset.oneWayMin) || 3;
+  var oneWayMax = parseFloat(root.dataset.oneWayMax) || 22;
+  var key = 'sp-ground-sent-' + root.dataset.alertId;
+  var q = function (s) { return root.querySelector(s); };
+  var sentLabel = q('[data-sent-label]'), count = q('[data-count]'), caption = q('[data-count-caption]');
+  var windowEl = q('[data-window]'), announce = q('[data-announce]');
+  var queueBtn = q('[data-queue-btn]'), resetBtn = q('[data-reset-btn]');
+  var timer = null, lastPhase = null;
+
+  function utc(ms) { return new Date(ms).toISOString().slice(11, 16) + ' UTC'; }
+  function mmss(ms) {
+    var s = Math.max(0, Math.ceil(ms / 1000)), m = Math.floor(s / 60);
+    return String(m).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+  }
+  function getSent() {
+    var server = Date.parse(root.dataset.sentAt || '');
+    if (!isNaN(server)) return server;
+    try { var v = parseInt(sessionStorage.getItem(key), 10); return isNaN(v) ? null : v; } catch (e) { return null; }
+  }
+  function say(phase, text) {
+    if (phase !== lastPhase) { lastPhase = phase; announce.textContent = text; }
+  }
+  function render() {
+    var sent = getSent();
+    if (sent === null) {
+      sentLabel.textContent = 'Not sent (simulated uplink)';
+      count.textContent = '--:--';
+      caption.textContent = 'Starts when the packet is queued. Reply expected ' + (oneWayMin * 2) + '\u2013' + (oneWayMax * 2) + ' min after sending.';
+      windowEl.textContent = '';
+      queueBtn.classList.remove('hidden'); resetBtn.classList.add('hidden');
+      lastPhase = 'idle';
+      return;
+    }
+    var earliest = sent + oneWayMin * 2 * 60000, latest = sent + oneWayMax * 2 * 60000, now = Date.now();
+    sentLabel.textContent = utc(sent);
+    queueBtn.classList.add('hidden');
+    resetBtn.classList.toggle('hidden', !!root.dataset.sentAt);
+    windowEl.textContent = 'Reply window: ' + utc(earliest) + ' to ' + utc(latest) + ' (estimate).';
+    if (now < earliest) {
+      count.textContent = mmss(earliest - now);
+      caption.textContent = 'until the earliest possible reply';
+      say('wait', 'Packet queued. Earliest reply in ' + (oneWayMin * 2) + ' minutes.');
+    } else if (now < latest) {
+      count.textContent = mmss(latest - now);
+      caption.textContent = 'until the latest expected reply. The reply window is open.';
+      say('open', 'Reply window is open.');
+    } else {
+      count.textContent = '00:00';
+      caption.textContent = 'The expected reply window has passed. Follow the escalation step.';
+      say('late', 'The expected reply window has passed. Follow the escalation step.');
+      if (timer) { clearInterval(timer); timer = null; }
+    }
+  }
+  function start() { render(); if (!timer) timer = setInterval(render, 1000); }
+
+  queueBtn.addEventListener('click', function () {
+    try { sessionStorage.setItem(key, String(Date.now())); } catch (e) {}
+    lastPhase = null;
+    start();
+    resetBtn.focus();
+  });
+  resetBtn.addEventListener('click', function () {
+    try { sessionStorage.removeItem(key); } catch (e) {}
+    if (timer) { clearInterval(timer); timer = null; }
+    lastPhase = null;
+    render();
+    queueBtn.focus();
+  });
+  start();
+})();
+</script>
+{% endif %}

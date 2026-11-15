@@ -1,0 +1,28 @@
+{% comment %}
+  Django messages as accessible toasts. Included once from base.html.
+  Used by the public demo, where write actions return a message instead of saving.
+  warning/error use role="alert" (assertive); everything else is role="status" (polite).
+  Toasts never auto-hide, so nobody misses them; each one has a keyboard-reachable close button.
+{% endcomment %}
+{% if messages %}
+<div class="fixed right-space-md left-space-md sm:left-auto sm:w-[26rem] z-[35] flex flex-col gap-space-sm pointer-events-none {% if public_demo %}top-36 sm:top-32{% else %}top-24{% endif %}"
+     id="message-toasts">
+  {% for message in messages %}
+  <div class="pointer-events-auto flex items-start gap-space-sm rounded-xl bg-surface-container-highest/95 backdrop-blur-xl p-space-md shadow-2xl border border-white/10 border-l-4 {% if message.level_tag == 'success' %}border-l-[#22E3A0]{% elif message.level_tag == 'warning' %}border-l-[#FFB020]{% elif message.level_tag == 'error' %}border-l-error{% else %}border-l-primary-container{% endif %}"
+       data-toast
+       {% if message.level_tag == 'warning' or message.level_tag == 'error' %}role="alert"{% else %}role="status"{% endif %}>
+    <span aria-hidden="true" class="material-symbols-outlined text-[22px] shrink-0 {% if message.level_tag == 'success' %}text-[#22E3A0]{% elif message.level_tag == 'warning' %}text-[#FFB020]{% elif message.level_tag == 'error' %}text-error{% else %}text-primary-container{% endif %}">
+      {% if message.level_tag == 'success' %}check_circle{% elif message.level_tag == 'warning' %}warning{% elif message.level_tag == 'error' %}error{% else %}info{% endif %}
+    </span>
+    <p class="flex-1 font-body-md text-body-md text-on-surface">
+      <span class="sr-only">{% if message.level_tag == 'success' %}Success: {% elif message.level_tag == 'warning' %}Notice: {% elif message.level_tag == 'error' %}Error: {% else %}Info: {% endif %}</span>{{ message }}
+    </p>
+    <button type="button" aria-label="Dismiss message"
+            class="h-10 w-10 -mt-2 -mr-2 shrink-0 rounded-lg text-on-surface-variant hover:text-on-surface hover:bg-surface-bright focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-container flex items-center justify-center transition-colors"
+            onclick="this.closest('[data-toast]').remove()">
+      <span aria-hidden="true" class="material-symbols-outlined text-[18px]">close</span>
+    </button>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}

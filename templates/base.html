@@ -341,6 +341,14 @@
 
     <!-- Main Content Dynamic Container -->
     <main class="w-full pt-16 bg-transparent flex-1">
+      {% if public_demo %}
+      <!-- Public demo notice. `public_demo` comes from the context processor (feat/public-demo). -->
+      <div class="w-full sm:sticky sm:top-16 z-20 px-space-md py-1.5 flex items-center justify-center gap-space-sm text-center font-label-sm text-label-sm sm:text-body-sm bg-surface-container-high text-on-surface border-b border-primary-container/40"
+           id="public-demo-banner" role="status">
+        <span aria-hidden="true" class="material-symbols-outlined text-[16px] text-primary-container shrink-0">visibility</span>
+        <span>Public demo, read-only. Simulated crew data. Not a medical device.</span>
+      </div>
+      {% endif %}
       {% if is_simulated_data %}
       <!-- Shown whenever the astronaut's readings are simulated demo data -->
       <div class="w-full px-space-md py-1.5 text-center text-xs font-mono bg-[rgba(255,176,32,0.2)] text-[#FFB020] border-b border-[#FFB020]/30">
@@ -352,6 +360,8 @@
     </main>
 
   </div>
+
+  {% include 'partials/messages.html' %}
 
   <!-- Reusable Manual Telemetry Ingest Modal ("Add a reading") -->
   <div class="hidden fixed inset-0 z-50 flex items-center justify-center p-space-md bg-surface-container-lowest/80 backdrop-blur-md"
