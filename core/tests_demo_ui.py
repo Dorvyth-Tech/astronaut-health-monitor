@@ -179,3 +179,82 @@ class BodyFigureTests(TestCase):
         self.assertIn('id="body-map"', html)
         for key in ('sleep', 'mood', 'resting_hr', 'hrv', 'exercise', 'body_temp'):
             self.assertIn(f'id="metric-{key}"', html)
+
+
+class GroundSupportSummaryTests(TestCase):
+    """The Ground Support summary card is built from health_* keys, never fixed copy."""
+
+    REMOVED = (
+        'Mostly nominal. Sleep has dropped four days in a row.',
+        'down from 7.3 h four days ago',
+        'Ground Medical Officer intervention recommended',
+        'REM deficit',
+        'Target 78+',
+        'Physiological Condition: Stable',
+    )
+
+    def _render(self, **ctx):
+        from django.contrib.auth.models import AnonymousUser
+        from django.test import RequestFactory
+
+        request = RequestFactory().get('/ground-support/')
+        request.user = AnonymousUser()
+        context = {'active_nav': 'ground_support', 'ground_messages': [], 'selected_filter': 'all'}
+        context.update(ctx)
+        return render_to_string('core/ground_support.html', context, request=request)
+
+    def test_each_status_renders_its_label_pill_and_headline(self):
+        cases = {
+            'nominal': ('Nominal', 'text-[#22E3A0]', 'nominal range'),
+            'caution': ('Caution', 'text-[#FFB020]', 'caution range'),
+            'critical': ('Critical', 'text-error', 'critical range'),
+            'no_data': ('No data', 'text-outline', 'Not enough baseline data'),
+        }
+        for status, (label, pill_class, headline) in cases.items():
+            with self.subTest(status=status):
+                html = self._render(health_status=status, health_label=label, health_color='#123456',
+                                    health_score=90, health_dashoffset=40, physio_reserve='86.8')
+                self.assertIn(f'data-health-pill="{status}"', html)
+                self.assertIn(f'{label} Status', html)
+                self.assertIn(f'Physiological Condition: {label}', html)
+                self.assertIn(pill_class, html)
+                self.assertIn(headline, html)
+
+    def test_backend_color_used_for_ring_when_valid_and_ignored_when_not(self):
+        html = self._render(health_status='caution', health_label='Caution', health_color='#abcdef')
+        self.assertIn('stroke="#abcdef"', html)
+        html = self._render(health_status='caution', health_label='Caution', health_color='red;"><script>')
+        self.assertNotIn('<script>', html.split('Primary Arc')[1].split('</svg>')[0])
+        self.assertIn('stroke="#FFB020"', html)
+
+    def test_page_renders_without_any_health_keys_as_no_data(self):
+        html = self._render()
+        self.assertIn('data-health-pill="no_data"', html)
+        self.assertIn('No data Status', html)
+        self.assertNotIn('Nominal Status', html)
+        self.assertIn('Not enough baseline data', html)
+
+    def test_zero_offset_means_full_ring_not_empty(self):
+        html = self._render(health_status='nominal', health_label='Nominal', health_score=100, health_dashoffset=0)
+        self.assertIn('stroke-dashoffset="0"', html)
+
+    def test_unknown_status_is_no_data_not_nominal(self):
+        html = self._render(health_status='great', health_label='Nominal')
+        self.assertIn('data-health-pill="no_data"', html)
+        self.assertNotIn('Nominal Status', html)
+
+    def test_removed_static_copy_is_gone(self):
+        for ctx in ({}, {'health_status': 'nominal', 'health_label': 'Nominal'}):
+            html = self._render(sleep_latest='5.8', sleep_base='7.2', **ctx)
+            for text in self.REMOVED:
+                self.assertNotIn(text, html, text)
+
+    def test_sleep_baseline_line_only_when_provided(self):
+        self.assertIn('Baseline 7.2 h.', self._render(sleep_latest='5.8', sleep_base='7.2'))
+        self.assertNotIn('Baseline  h', self._render(sleep_latest='5.8'))
+
+    def test_physio_reserve_keeps_experimental_tag(self):
+        html = self._render(physio_reserve='86.8')
+        self.assertIn('86.8%', html)
+        self.assertIn('Experimental · not a validated measure', html)
+        self.assertIn('No data', self._render())

@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load health_status %}
 {% load static %}
 
 {% block title %}Ground Support Link | Space-Pulse{% endblock %}
@@ -107,38 +108,40 @@
               <circle class="text-surface-container-highest/60" cx="80" cy="80" fill="none" r="68" stroke="currentColor" stroke-width="8"></circle>
               <!-- Target Baseline Arc Marker (75%) -->
               <circle class="text-outline/40" cx="80" cy="80" fill="none" r="68" stroke="currentColor" stroke-dasharray="3 6" stroke-width="2"></circle>
-              <!-- Primary Arc: 82% -->
-              <circle class="text-primary-fixed-dim" cx="80" cy="80" fill="none" r="68" stroke="currentColor" stroke-dasharray="{{ health_circumference|default:427.25 }}" stroke-dashoffset="{{ health_dashoffset|default:76.9 }}" stroke-linecap="round" stroke-width="9" style="filter: drop-shadow(0 0 8px rgba(0, 219, 233, 0.4));"></circle>
+              <!-- Primary Arc: the health score. Empty ring when there is no score. -->
+              {% health_status health_status health_label health_color as hs %}
+              {% with ring_len=health_circumference|default:427.26 %}
+              <circle cx="80" cy="80" fill="none" r="68" stroke="{{ hs.color }}" stroke-dasharray="{{ ring_len }}" stroke-dashoffset="{% if health_dashoffset is None %}{{ ring_len }}{% else %}{{ health_dashoffset }}{% endif %}" stroke-linecap="round" stroke-width="9" style="filter: drop-shadow(0 0 8px {{ hs.color }}66);"></circle>
+              {% endwith %}
             </svg>
             <div class="absolute inset-0 flex flex-col items-center justify-center text-center">
               <span class="font-label-caps text-[10px] tracking-widest text-outline uppercase">INDEX</span>
-              <span class="font-display-hero text-headline-lg text-primary tracking-tight font-bold">{{ health_score|default:82 }}</span>
+              <span class="font-display-hero text-headline-lg text-primary tracking-tight font-bold">{% if health_score is None %}--{% else %}{{ health_score }}{% endif %}</span>
               <span class="font-label-caps text-label-caps text-on-surface-variant font-semibold">/ 100</span>
             </div>
           </div>
           <div class="hidden sm:flex flex-col gap-1">
-            <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-container-highest text-primary-fixed font-label-caps text-label-caps uppercase border border-white/5">
-              <span class="w-2 h-2 rounded-full bg-primary-fixed animate-ping"></span>
-              Nominal Status
+            <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full {{ hs.pill }} font-label-caps text-label-caps uppercase border border-white/5" data-health-pill="{{ hs.status }}">
+              <span class="w-2 h-2 rounded-full {{ hs.dot }}{% if hs.pulse %} animate-ping{% endif %}"></span>
+              {{ hs.label }} Status
             </div>
             <span class="font-body-sm text-body-sm text-outline">Autonomous Score</span>
-            <span class="font-label-caps text-label-caps text-on-surface-variant">Target 78+</span>
           </div>
         </div>
 
         <!-- Middle: Clinical Assessment Headline & Narrative -->
         <div class="flex-1 flex flex-col gap-space-xs text-center lg:text-left">
           <div class="flex items-center justify-center lg:justify-start gap-space-sm">
-            <span class="px-2.5 py-0.5 rounded-full bg-surface-container-high text-primary-fixed font-label-caps text-label-caps uppercase border border-white/5">
-              Physiological Condition: Stable
+            <span class="px-2.5 py-0.5 rounded-full {{ hs.pill }} font-label-caps text-label-caps uppercase border border-white/5">
+              Physiological Condition: {{ hs.label }}
             </span>
             <span class="font-body-sm text-body-sm text-outline">Sol {{ current_astronaut.current_mission_day|default:142 }} Telemetry</span>
           </div>
           <h2 class="font-headline-md text-headline-md text-on-surface font-semibold tracking-wide">
-            Mostly nominal. Sleep has dropped four days in a row.
+            {{ hs.headline }}
           </h2>
           <p class="font-body-md text-body-md text-on-surface-variant leading-relaxed">
-            Neuro-circadian monitoring active. Stress index ({{ stress_latest|default:3 }}/10) and resting HRV ({{ hrv_latest|default:62 }} ms) remain within mission baseline variance. Ground Medical Officer intervention recommended only if REM deficit extends beyond 48 hours.
+            Neuro-circadian monitoring active.{% if stress_latest %} Latest stress index {{ stress_latest }}/10.{% endif %}{% if hrv_latest %} Latest resting HRV {{ hrv_latest }} ms.{% endif %} Simulated crew data.
           </p>
         </div>
 
@@ -155,10 +158,10 @@
           <div class="pt-space-xs flex flex-col gap-1">
             <div class="flex justify-between items-baseline">
               <span class="font-body-sm text-body-sm text-outline">Physio Reserve</span>
-              <span class="font-headline-sm text-headline-sm text-primary-fixed font-bold">{{ physio_reserve|default:88.4 }}%</span>
+              <span class="font-headline-sm text-headline-sm text-primary-fixed font-bold">{% if physio_reserve %}{{ physio_reserve }}%{% else %}No data{% endif %}</span>
             </div>
             <div class="w-full h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
-              <div class="h-full bg-primary-fixed rounded-full" style="width: {{ physio_reserve|default:88.4 }}%;"></div>
+              <div class="h-full bg-primary-fixed rounded-full" style="width: {% if physio_reserve %}{{ physio_reserve }}{% else %}0{% endif %}%;"></div>
             </div>
             <span class="font-label-caps text-[9px] text-outline uppercase" title="Team-defined composite of recent sleep, HRV and resting HR. Not a clinical metric and not used in the official health score or alerts.">Experimental · not a validated measure</span>
           </div>
@@ -433,7 +436,7 @@
           <div>
             <h4 class="font-headline-sm text-headline-sm text-primary">Sleep is trending down</h4>
             <p class="font-body-md text-body-md text-on-surface-variant mt-1 leading-relaxed">
-              {{ sleep_latest }} h today, down from 7.3 h four days ago. Baseline {{ sleep_base }} h. 
+              {{ sleep_latest }} h today.{% if sleep_base %} Baseline {{ sleep_base }} h.{% endif %}
               <span class="text-on-surface block mt-1"><strong class="text-primary-fixed">Autonomous Countermeasure:</strong> Cabin circadian lighting shifted to dusk spectrum; Melatonin 0.5mg protocol advised prior to Sol 143 rest cycle.</span>
             </p>
           </div>
