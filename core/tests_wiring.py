@@ -173,6 +173,36 @@ class HealthScoreTests(SimpleTestCase):
         self.assertEqual(result['score'], 89)
         self.assertEqual(result['status'], 'caution')
 
+    def test_experimental_metrics_do_not_affect_health_score(self):
+        official = self.evals(sleep='nominal', hrv='nominal', resting_hr='nominal',
+                              exercise='nominal', body_temp='nominal', cabin_co2='nominal',
+                              mood='nominal')
+        baseline_score = calculate_health_score(official)
+        self.assertEqual(baseline_score['score'], 100)
+        self.assertEqual(baseline_score['status'], 'nominal')
+
+        # Even if unofficial tiles are labelled critical, the official score stays 100.
+        mixed = dict(official)
+        mixed['mood_stress'] = {'status': 'critical', 'value': 10.0}
+        mixed['hydration'] = {'status': 'critical', 'value': 0.0}
+        mixed['physio_reserve'] = {'status': 'critical', 'value': 0.0}
+        mixed['cumulative_stress'] = {'status': 'critical', 'value': 10.0}
+        isolated = calculate_health_score(mixed)
+        self.assertEqual(isolated['score'], baseline_score['score'])
+        self.assertEqual(isolated['status'], baseline_score['status'])
+        self.assertTrue(isolated['physio_reserve_experimental'])
+        self.assertTrue(isolated['cumulative_stress_experimental'])
+        self.assertIn('Experimental', isolated['experimental_tag'])
+        self.assertIn('not a validated measure', isolated['experimental_tag'])
+
+        # Unofficial metrics alone are not enough to produce a score.
+        only_experimental = calculate_health_score({
+            'mood_stress': {'status': 'nominal', 'value': 2.0},
+            'hydration': {'status': 'nominal', 'value': 96.0},
+        })
+        self.assertEqual(only_experimental['score'], '--')
+        self.assertEqual(only_experimental['status'], 'no_data')
+
 
 class RiskVectorTests(SimpleTestCase):
     def test_group_without_data_shows_no_data(self):
@@ -189,6 +219,8 @@ class RiskVectorTests(SimpleTestCase):
 class AmberEdgeTests(SimpleTestCase):
     def test_edges_come_from_the_baseline(self):
         self.assertEqual(amber_edges('sleep', 7.2), {'low': 6.2, 'high': None})
+        self.assertEqual(amber_edges('sleep', 8.0), {'low': 7.0, 'high': None})
+        self.assertNotEqual(amber_edges('sleep', 8.0)['low'], 6.0)
         self.assertEqual(amber_edges('resting_hr', 60.0), {'low': None, 'high': 66.0})
         self.assertEqual(amber_edges('hrv', 50.0), {'low': 42.5, 'high': None})
         self.assertEqual(amber_edges('body_temp', 36.7), {'low': None, 'high': 37.2})

@@ -37,6 +37,7 @@ from core.services import (
     calculate_health_score,
     calculate_risk_vectors,
     sync_alerts_for_astronaut,
+    amber_edges,
 )
 
 logger = logging.getLogger(__name__)
@@ -466,8 +467,10 @@ def dashboard_view(request):
         acknowledged=False
     ).order_by('-timestamp')[:5]
 
-    # Baseline for sleep in chart
-    sleep_baseline = baselines.get('sleep', 7.2)
+    # Sleep chart guide: amber starts more than 1 h below the personal baseline
+    # (Science Lead table). No hardcoded 6.0 h band, and no invented default.
+    sleep_baseline = baselines.get('sleep')
+    sleep_caution_low = amber_edges('sleep', sleep_baseline)['low']
 
     # Companion panel. Chips are plain links (?ask=<id>), so they work without JavaScript.
     companion_answers = companion_answers_for(astronaut, metric_evals, health_score)
@@ -491,6 +494,7 @@ def dashboard_view(request):
         'active_alerts': active_alerts,
         'companion_answers': companion_answers,
         'sleep_baseline': sleep_baseline,
+        'sleep_caution_low': sleep_caution_low,
         'next_ground_pass': 'T-01:14:22',
         'comm_latency': '18m 42s',
     })
@@ -671,7 +675,9 @@ def ground_support_view(request):
     stress_vals = get_recent_7('mood_stress', [3, 3, 4, 3, 4, 3, 3])
 
     sleep_latest = sleep_vals[-1] if sleep_vals else 5.8
-    sleep_base = baselines.get('sleep', 7.2)
+    sleep_base_raw = baselines.get('sleep')
+    sleep_caution_low = amber_edges('sleep', sleep_base_raw)['low']
+    sleep_base = sleep_base_raw if sleep_base_raw is not None else 7.2
     sleep_delta = round(sleep_latest - sleep_base, 1)
 
     hrv_latest = int(round(hrv_vals[-1])) if hrv_vals else 62
@@ -709,6 +715,7 @@ def ground_support_view(request):
         'flight_surgeon_console': "Ground Console JSC-MED-1",
         'sleep_latest': f"{sleep_latest:.1f}",
         'sleep_base': f"{sleep_base:.1f}",
+        'sleep_caution_low': sleep_caution_low,
         'sleep_delta': f"{sleep_delta:+.1f}",
         'hrv_latest': hrv_latest,
         'hrv_base': hrv_base,
