@@ -80,11 +80,24 @@
     <input id="pulse-input" type="text" maxlength="300" autocomplete="off"
            placeholder="Message Pulse, or say &quot;remember that ...&quot;"
            class="flex-1 px-space-md py-space-xs rounded-full font-body-sm text-body-sm bg-surface-container-high text-on-surface placeholder:text-outline border border-white/5 focus:outline-none focus:border-primary-container/40">
+    <button id="pulse-mic" type="button" hidden aria-pressed="false" aria-label="Talk to Pulse by voice"
+            class="px-space-md py-space-xs rounded-full font-body-sm text-body-sm transition-all border bg-surface-container-high text-on-surface-variant border-white/5 hover:bg-surface-bright focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-container disabled:opacity-50">
+      <span id="pulse-mic-label">Talk</span>
+    </button>
     <button id="pulse-send" type="submit"
             class="px-space-md py-space-xs rounded-full font-body-sm text-body-sm transition-all border bg-primary-container/10 text-primary-container border-primary-container/40 hover:bg-primary-container/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-container disabled:opacity-50">
       Send
     </button>
   </form>
+
+  <div id="pulse-voice" hidden class="flex flex-col gap-space-xs">
+    <label id="pulse-speak-label" class="flex items-center gap-space-xs font-body-sm text-body-sm text-on-surface-variant">
+      <input id="pulse-speak" type="checkbox">
+      Speak Pulse's replies aloud
+    </label>
+    <p id="pulse-voice-status" role="status" aria-live="polite" class="font-body-sm text-body-sm text-on-surface-variant"></p>
+    <p class="font-label-sm text-label-sm text-on-surface-variant">Voice is optional and uses your browser's own speech features. In Chrome and Edge, what you say is sent to the browser maker's speech service to be turned into text. Pulse never receives or keeps audio: only the text is sent, like a typed message. Replies are read aloud on your device.</p>
+  </div>
 
   <div class="flex flex-col gap-space-xs p-space-md rounded-xl bg-surface-container-high/60 border border-white/5">
     <h3 id="pulse-memory-title" class="font-headline-sm text-headline-sm text-on-surface font-semibold">What Pulse remembers</h3>
@@ -127,6 +140,7 @@
     var conversationId = null;
     var busy = false;
     var idleTimer = null;
+    var voice = { afterReply: function () {}, stop: function () {} };
     var barColors = { caution: 'bg-[#FFB020]', critical: 'bg-error', nominal: 'bg-[#22E3A0]', no_data: 'bg-outline' };
 
     function setState(state) {
@@ -227,7 +241,7 @@
       }, function () { showError('I could not reach the server. Check your connection and try again.'); });
     }
 
-    function send(text) {
+    function send(text, viaVoice) {
       if (busy) { return; }
       clearError();
       var body = { message: text };
@@ -252,6 +266,7 @@
         scrollDown();
         setState(res.data.reply.state || 'responding');
         if (res.data.memory) { loadMemories(); }
+        voice.afterReply(res.data.reply, !!viaVoice);
         input.focus();
       }, function () {
         setBusy(false);
@@ -285,6 +300,7 @@
         conversationId = res.data.conversation_id;
         list.textContent = '';
         updateEmpty();
+        voice.stop();
         setState('idle');
         input.focus();
       }, function () { showError('I could not reach the server. Check your connection and try again.'); });
@@ -324,6 +340,143 @@
         else { memoryError.textContent = (res.data && res.data.error) || 'I could not save that.'; memoryError.classList.remove('hidden'); }
       }, function () { memoryError.textContent = 'I could not reach the server.'; memoryError.classList.remove('hidden'); });
     });
+
+
+    // --- Voice: the browser's own speech features only. No audio reaches SPACE-PULSE; only the
+    // transcribed text is sent, through the same send() as a typed message. Hidden when unsupported.
+    voice = (function () {
+      var Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      var synth = window.speechSynthesis;
+      var micButton = document.getElementById('pulse-mic');
+      var micLabel = document.getElementById('pulse-mic-label');
+      var voiceBox = document.getElementById('pulse-voice');
+      var speakBox = document.getElementById('pulse-speak');
+      var speakLabel = document.getElementById('pulse-speak-label');
+      var status = document.getElementById('pulse-voice-status');
+      var idleClass = micButton.className;
+      var activeClass = 'px-space-md py-space-xs rounded-full font-body-sm text-body-sm transition-all border bg-primary-container/10 text-primary-container border-primary-container/40 hover:bg-primary-container/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-container disabled:opacity-50';
+      var noop = { afterReply: function () {}, stop: function () {} };
+      if (!Recognition && !synth) { return noop; }
+      voiceBox.hidden = false;
+      var lang = document.documentElement.lang || navigator.language || 'en-US';
+      var recognizer = null;
+      var listening = false;
+      var conversation = false;
+
+      function setStatus(text) { status.textContent = text; }
+      function setMic(on) {
+        listening = on;
+        micButton.setAttribute('aria-pressed', on ? 'true' : 'false');
+        micButton.className = on ? activeClass : idleClass;
+        micLabel.textContent = on ? 'Stop' : 'Talk';
+      }
+      function speakOn() { return !!synth && speakBox.checked; }
+
+      if (synth) {
+        try { speakBox.checked = window.localStorage.getItem('pulseSpeak') === '1'; } catch (e) {}
+        speakBox.addEventListener('change', function () {
+          try { window.localStorage.setItem('pulseSpeak', speakBox.checked ? '1' : '0'); } catch (e) {}
+          if (!speakBox.checked) { synth.cancel(); }
+        });
+      } else {
+        speakLabel.hidden = true;
+      }
+
+      function listen() {
+        if (!Recognition || listening || busy) { return; }
+        if (synth) { synth.cancel(); }
+        clearError();
+        var finalText = '';
+        var cancelled = false;
+        var note = '';
+        recognizer = new Recognition();
+        recognizer.lang = lang;
+        recognizer.interimResults = true;
+        recognizer.continuous = false;
+        recognizer.maxAlternatives = 1;
+        recognizer.onresult = function (event) {
+          var interim = '';
+          for (var i = event.resultIndex; i < event.results.length; i++) {
+            if (event.results[i].isFinal) { finalText += event.results[i][0].transcript; }
+            else { interim += event.results[i][0].transcript; }
+          }
+          input.value = (finalText + interim).slice(0, 300);
+        };
+        recognizer.onerror = function (event) {
+          conversation = false;
+          if (event.error === 'aborted') { cancelled = true; return; }
+          if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+            showError('Microphone access is blocked. Allow it in your browser settings, or type instead.');
+          } else if (event.error === 'no-speech') {
+            note = 'I did not hear anything, so I stopped listening.';
+          } else if (event.error === 'network') {
+            showError('Voice input needs an internet connection in this browser. You can still type.');
+          } else {
+            showError('Voice input stopped. Try again, or type instead.');
+          }
+        };
+        recognizer.onend = function () {
+          recognizer = null;
+          setMic(false);
+          setStatus(note);
+          var text = finalText.trim().slice(0, 300);
+          if (cancelled || !text) { return; }
+          input.value = '';
+          send(text, true);
+        };
+        try {
+          recognizer.start();
+          setMic(true);
+          setStatus('Listening…');
+        } catch (e) {
+          recognizer = null;
+          setMic(false);
+        }
+      }
+
+      function stop() {
+        conversation = false;
+        if (recognizer) { recognizer.abort(); }
+        if (synth) { synth.cancel(); }
+      }
+
+      function speak(reply, viaVoice) {
+        // Read the reply and any escalation line, nothing else (sources and notes stay on screen).
+        var said = [reply.text, reply.escalation].filter(function (part) { return typeof part === 'string' && part.trim(); }).join(' ');
+        var parts = said.match(/[^.!?]+[.!?]*/g) || [];
+        synth.cancel();
+        if (!parts.length) { return; }
+        var urgent = reply.state === 'emergency' || !!reply.escalation;
+        if (urgent) { conversation = false; }
+        parts.forEach(function (part, index) {
+          var utterance = new SpeechSynthesisUtterance(part.trim());
+          utterance.lang = lang;
+          if (index === parts.length - 1) {
+            utterance.onend = function () {
+              if (viaVoice && conversation && !urgent) { listen(); }
+            };
+          }
+          synth.speak(utterance);
+        });
+      }
+
+      if (Recognition) {
+        micButton.hidden = false;
+        micButton.addEventListener('click', function () {
+          if (listening) { stop(); return; }
+          conversation = true;
+          listen();
+        });
+      }
+      window.addEventListener('pagehide', function () { stop(); });
+
+      return {
+        afterReply: function (reply, viaVoice) {
+          if (speakOn()) { speak(reply, viaVoice); } else { conversation = false; }
+        },
+        stop: stop
+      };
+    })();
 
     loadHistory();
     loadMemories();

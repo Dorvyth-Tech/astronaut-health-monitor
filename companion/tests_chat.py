@@ -687,3 +687,24 @@ class ExtraUrgentWordsTests(SimpleTestCase):
 
     def test_number_is_not_numb(self):
         self.assertFalse(chat.is_urgent('what number is my sleep score'))
+
+
+# --- voice (browser-only; the server sees text exactly like a typed message) ----------------------------
+
+
+class VoicePanelTests(ChatTestCase):
+    def test_dashboard_has_hidden_voice_controls_and_the_disclosure(self):
+        html = self.client_a.get(reverse('core:dashboard')).content.decode()
+        panel = html.split('id="pulse-chat"', 1)[1]
+        self.assertIn('<button id="pulse-mic" type="button" hidden', panel)
+        self.assertIn('<div id="pulse-voice" hidden', panel)
+        self.assertIn('id="pulse-speak" type="checkbox"', panel)
+        self.assertIn("Pulse never receives or keeps audio", panel)
+        self.assertIn("browser maker's speech service", panel)
+        script = panel.split('</script>', 1)[0]
+        self.assertIn('voice.afterReply(res.data.reply, !!viaVoice)', script)
+        self.assertNotIn('innerHTML', script)
+
+    def test_sources_page_discloses_voice(self):
+        html = self.client_a.get(reverse('core:sources')).content.decode()
+        self.assertIn('SPACE-PULSE never receives or stores audio', html)

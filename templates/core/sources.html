@@ -159,6 +159,10 @@
         everyday conversation). These never contain health facts: each reply is checked and
         rejected if it has numbers, diagnosis-style words or claims of human feelings, falls back
         to a fixed reply, and is labelled "Written by AI". Urgent messages never reach the model.
+        Voice in the Pulse chat is optional and uses only the browser's built-in speech features:
+        speech-to-text (in Chrome and Edge, audio goes to the browser maker's speech service) and
+        text-to-speech on the device. SPACE-PULSE never receives or stores audio; the transcribed
+        text goes through exactly the same checks as a typed message.
         The layer is off unless {{ catalog.companion.llm_off_unless }}.
       </p>
     </section>

@@ -189,7 +189,7 @@ This project is released under the MIT License. See `LICENSE`.
 
 ## Pulse chat
 
-The dashboard has a **Chat with Pulse** panel under the Pulse Companion section. It is text only. Pulse is an AI companion and says so; it is not a medical device and does not diagnose.
+The dashboard has a **Chat with Pulse** panel under the Pulse Companion section. Text is primary, with optional voice (below). Pulse is an AI companion and says so; it is not a medical device and does not diagnose.
 
 - **What it does.** Health and environment questions ("How am I doing?", "Explain my sleep trend", "Review the cabin environment") use the same routing and the same rule-based answers as Ask Pulse (`core/companion.py`), built from your own data. Sources stay labelled (simulated, self-reported, dataset, CSV), and "no data" or "old data" is shown as such, never as normal. "Start a check-in" links to the existing daily check-in page. Ordinary conversation (hello, "I feel lonely", "tell me something interesting") gets a short, warm reply.
 - **Safeguards.**
@@ -198,6 +198,7 @@ The dashboard has a **Chat with Pulse** panel under the Pulse Companion section.
   - The model never receives readings, alerts, health answers or other users' data. It only gets your message, your saved notes and the last few turns of ordinary conversation.
   - With the model off or offline, every feature still works with fixed replies.
 - **Memory controls.** Pulse remembers only what you explicitly ask it to ("remember that ..." in the chat, or the Remember box under **What Pulse remembers**). You can see every note and delete it at any time. Notes are private to your login (at most 20, 200 characters each) and are used only as context for ordinary conversation.
+- **Voice (optional).** A **Talk** button turns speech into a message with the browser's Web Speech API, and **Speak Pulse's replies aloud** reads replies with the browser's on-device text-to-speech. With both on, Pulse listens again after each spoken reply, so you can hold a voice conversation; it stops when you press Stop, stay silent, or get an urgent reply. The transcript goes through the same `send` endpoint and the same safeguards as typed text, and SPACE-PULSE never receives or stores audio. Speech-to-text works in Chrome and Edge, which send audio to the browser maker's speech service (disclosed in the panel and on `/sources/`); in other browsers the button is hidden and text works as usual. No new dependency or API key.
 - **Privacy.** Conversations and notes are stored per user and per astronaut; another user's conversation or note answers 404. Message text is never logged.
 - **Endpoints** (login required, JSON, CSRF): `POST /companion/chat/send/`, `GET /companion/chat/history/`, `POST /companion/chat/new/`, `GET /companion/chat/memories/`, `POST /companion/chat/memories/add/`, `POST /companion/chat/memories/<id>/delete/`. The code lives in the `companion` app.
 - **Use of AI.** In addition to the "Use of AI" section above, the optional model can write short small-talk replies for Pulse chat, as described here. The Pulse avatar is a small hand-written SVG (no generated image, no NASA logos). This feature was written with Grok Bot, an AI coding assistant, and reviewed by a human team member.
