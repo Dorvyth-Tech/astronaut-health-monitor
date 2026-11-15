@@ -83,7 +83,7 @@ def login_view(request):
     """
     Cosmic glassmorphic login view.
     Authenticates crew credentials and routes to the requested path.
-    This view and logout_view are the only ones that do not need a login.
+    This view, logout_view and sources_view do not need a login.
     """
     next_url = request.GET.get('next') or request.POST.get('next') or reverse('core:dashboard')
     # Only follow ?next= to a page on this site.
@@ -274,6 +274,25 @@ def space_weather_view(request):
         'fetched_at': view['fetched_at'].isoformat(),
         'summary': view['summary'],
         'display': display,
+    })
+
+
+
+@login_not_required
+@require_GET
+def sources_view(request):
+    """Public data-provenance page: where every data point comes from.
+
+    Login is not required so judges can read it without a demo account.
+    It only reads already-stored SpaceWeatherSnapshot rows; it never calls NASA.
+    """
+    from core.models import SpaceWeatherSnapshot
+    from core.sources import page_catalog
+
+    snapshot = SpaceWeatherSnapshot.objects.first()
+    return render(request, 'core/sources.html', {
+        'active_nav': 'sources',
+        'catalog': page_catalog(snapshot),
     })
 
 

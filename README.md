@@ -165,6 +165,8 @@ Open [http://127.0.0.1:8000/](http://127.0.0.1:8000/) in your web browser.
 
 ## Data sources & citations
 
+A public provenance page at [`/sources/`](/sources/) lists every indicator, rule, citation and disclaimer in one place.
+
 - **NASA DONKI** (Space Weather Database Of Notifications, Knowledge, Information): live space-weather events are requested from [api.nasa.gov](https://api.nasa.gov). The DONKI catalogue is also published by CCMC at [kauai.ccmc.gsfc.nasa.gov/DONKI](https://kauai.ccmc.gsfc.nasa.gov/DONKI/) and [ccmc.gsfc.nasa.gov/tools/DONKI](https://ccmc.gsfc.nasa.gov/tools/DONKI/).
 - **NASA Open Science Data Repository (OSDR)** ([osdr.nasa.gov](https://osdr.nasa.gov)): cited as a research reference only. The demo does not load crew telemetry from OSDR.
 - **NOAA Space Weather Scales** ([swpc.noaa.gov/noaa-scales-explanation](https://www.swpc.noaa.gov/noaa-scales-explanation)): used to map DONKI geomagnetic-storm Kp values to the NOAA G-scale (G1–G5).
