@@ -144,3 +144,40 @@ class GroundPageScoreTests(TestCase):
         self.assertEqual(ground.status_code, 200)
         self.assertEqual(ground.context['health_score'], dash.context['health_score']['score'])
         self.assertNotEqual(ground.context['physio_reserve'], 88.4)
+
+
+class AlertDetailGroundPanelTests(TestCase):
+    """The alert page must use the real sent packet, like the dashboard does."""
+
+    def setUp(self):
+        self.astronaut = AstronautProfile.objects.create(
+            name='Amara Reyes', email='amara.reyes@mission.example')
+        user = get_user_model().objects.create_user(
+            username='amara', email='amara.reyes@mission.example', password='x-pass-123')
+        self.client.force_login(user)
+        self.alert = Alert.objects.create(
+            astronaut=self.astronaut, timestamp=timezone.now() - timedelta(minutes=30),
+            metric='sleep', severity='critical', title='Sleep',
+            message='Sleep well below baseline.')
+
+    def _get(self):
+        response = self.client.get(f'/alerts/{self.alert.id}/')
+        self.assertEqual(response.status_code, 200)
+        return response
+
+    def test_no_packet_means_no_panel_override(self):
+        self.assertIsNone(self._get().context['ground_panel'])
+
+    def test_sent_packet_after_alert_fills_panel(self):
+        packet = GroundMessage.objects.create(
+            astronaut=self.astronaut, subject='Health packet', body='Uplinked line',
+            timestamp=timezone.now() - timedelta(minutes=5), is_incoming=False)
+        response = self._get()
+        self.assertEqual(response.context['ground_panel']['packet_id'], f'GM-{packet.pk}')
+        self.assertContains(response, 'Uplinked line')
+
+    def test_packet_before_alert_is_ignored(self):
+        GroundMessage.objects.create(
+            astronaut=self.astronaut, subject='Old', body='Old line',
+            timestamp=timezone.now() - timedelta(hours=2), is_incoming=False)
+        self.assertIsNone(self._get().context['ground_panel'])
