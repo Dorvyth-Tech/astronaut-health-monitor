@@ -61,6 +61,7 @@ INSTALLED_APPS = [
     'core',
     'telemetry',
     'alerts',
+    'companion',     # Pulse chat: conversations, messages, memories
 ]
 
 MIDDLEWARE = [

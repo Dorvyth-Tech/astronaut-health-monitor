@@ -6,4 +6,5 @@ urlpatterns = [
     path('', include('core.urls')),
     path('', include('telemetry.urls')),
     path('', include('alerts.urls')),
+    path('companion/chat/', include('companion.urls')),
 ]
