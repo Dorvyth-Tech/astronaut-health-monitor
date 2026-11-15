@@ -161,5 +161,23 @@ Open [http://127.0.0.1:8000/](http://127.0.0.1:8000/) in your web browser.
 
 ---
 
+## Data sources & citations
+
+- **NASA DONKI** (Space Weather Database Of Notifications, Knowledge, Information): live space-weather events are requested from [api.nasa.gov](https://api.nasa.gov). The DONKI catalogue is also published by CCMC at [kauai.ccmc.gsfc.nasa.gov/DONKI](https://kauai.ccmc.gsfc.nasa.gov/DONKI/) and [ccmc.gsfc.nasa.gov/tools/DONKI](https://ccmc.gsfc.nasa.gov/tools/DONKI/).
+- **NASA Open Science Data Repository (OSDR)** ([osdr.nasa.gov](https://osdr.nasa.gov)): cited as a research reference only. The demo does not load crew telemetry from OSDR.
+- **NOAA Space Weather Scales** ([swpc.noaa.gov/noaa-scales-explanation](https://www.swpc.noaa.gov/noaa-scales-explanation)): used to map DONKI geomagnetic-storm Kp values to the NOAA G-scale (G1–G5).
+
+Crew biometric and habitat data in the demo is **simulated** and labelled as such (reading source `simulated`, plus a "SIMULATED DATA" banner while simulated readings are shown). Space weather is **context only** and is not part of the health score. The exercise plan of 150 minutes per week is a **team assumption**, not a Science Lead rule. The app makes **no medical diagnosis** and is not a medical device.
+
+## Use of AI
+
+The Pulse Companion's answers are **rule-based** (`core/companion.py`). An optional LLM layer (default provider Groq, model `openai/gpt-oss-20b`, with Gemini `gemini-3.5-flash-lite` as fallback) may only **rephrase** those rule-based answers and **classify** a typed question's intent by choosing from a fixed list. The model never writes the underlying answers. A safety validator rejects any rewrite that adds numbers or diagnosis-style words that were not in the original text. The LLM is off unless `COMPANION_LLM_ENABLED=True`.
+
+Development was AI-assisted: Grok Bot (an AI coding assistant) helped write backend code, tests and documentation. Every change was reviewed, tested and committed by a human team member. No AI-generated images or video are used. The app is hosted on Render, which is not an AI tool.
+
+## License
+
+This project is released under the MIT License. See `LICENSE`.
+
 ## Disclaimer
 *Prototype for demonstration purposes. Not a medical device.*
