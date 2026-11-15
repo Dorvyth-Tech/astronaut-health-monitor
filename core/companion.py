@@ -13,17 +13,15 @@ It never invents a threshold, never detects mood or hormones, and never
 diagnoses. The 'why' text of each indicator is the rule's own reason sentence
 (core/rules.py), word for word. The rest is fixed, friendly wording.
 
-Layer 2 (NOT built yet): an optional language model could rephrase these SAME
-answers in a more conversational way. The plan is:
-  1. read the key from the COMPANION_LLM_API_KEY environment variable,
-  2. write one new function, rephrase_with_llm(answers), that gets ONLY the
-     answer dicts returned below (never raw readings, never other users' data),
-  3. if the key is missing or anything fails, return the answers unchanged,
-  4. call it in core.views.companion_answers_for(), right after
-     build_companion_answers(). Nothing else in the app has to change.
+Layer 2 (optional, built in core/llm.py): rephrase_with_llm(answers) can ask a
+language model (Groq or Gemini) to reword ONLY the main answer text. It is off
+unless COMPANION_LLM_ENABLED=True, it is called from core.views.companion_answers_for,
+and it falls back to these exact answers on any failure or unsafe rewrite.
 
 Each answer is a dict with these keys:
   id              short stable name: overall, why_<indicator>, what_to_do, data_source
+                  (plus status_<indicator>, built only for "Ask Pulse" when an indicator is
+                  nominal and so has no why_ answer, see indicator_answer)
   question        the chip text
   answer          the friendly text
   indicator       the indicator key (e.g. 'sleep') or None for general answers
@@ -231,6 +229,23 @@ def _data_source(source_counts, simulated_note):
              "and the 150 min/week exercise plan is a team assumption.")
     return _make_answer('data_source', "Where does this data come from?", text, INFO,
                         source=DEFAULT_SOURCE, simulated_note=simulated_note)
+
+
+def indicator_answer(key, ev, simulated_note=''):
+    """The answer for ONE indicator, whatever its status (used by "Ask Pulse").
+
+    Caution, critical and no data are exactly the 'why_<key>' answer from the chips.
+    A nominal indicator has no chip, so it gets 'status_<key>': its own rule sentence
+    plus a plain "within your baseline rules". Same shape, nothing invented.
+    """
+    if ev['status'] != NOMINAL:
+        return _why(key, ev, simulated_note)
+    label = ev['display_label']
+    text = f"Good news: {label} is within your baseline rules. {ev['reason']}"
+    if key == 'mood':
+        text += " " + MOOD_NOTE
+    return _make_answer(f'status_{key}', f"How is {label}?", text, NOMINAL, indicator=key,
+                        source=source_for(key), simulated_note=simulated_note)
 
 
 # =========================================================================

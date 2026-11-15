@@ -118,3 +118,30 @@ class GroundMessage(models.Model):
 
     def __str__(self):
         return f"[Day {self.mission_day}] {self.sender}: {self.subject}"
+
+
+class SpaceWeatherSnapshot(models.Model):
+    """
+    The last good NASA DONKI space-weather summary (core/donki.py).
+
+    Context only: it is NOT crew radiation dose and nothing in the health rules reads it.
+    It exists so the dashboard can still show the last good data, labelled as cached,
+    when NASA is down or rate-limited. source='sample' marks an invented offline-demo
+    sample (always labelled "Sample data" in the UI).
+    """
+    SOURCE_CHOICES = [
+        ('donki', 'NASA DONKI'),
+        ('sample', 'Sample data (offline demo)'),
+    ]
+
+    source = models.CharField(max_length=10, choices=SOURCE_CHOICES, default='donki')
+    payload = models.JSONField()
+    fetched_at = models.DateTimeField()
+
+    class Meta:
+        verbose_name = "Space Weather Snapshot"
+        verbose_name_plural = "Space Weather Snapshots"
+        ordering = ['-fetched_at', '-id']
+
+    def __str__(self):
+        return f"{self.get_source_display()} @ {self.fetched_at:%Y-%m-%d %H:%M}"

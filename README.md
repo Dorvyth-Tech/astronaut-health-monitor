@@ -132,12 +132,21 @@ This populates:
 - A login for each astronaut (e.g. `amara.reyes@mission.example` / `validAccess2026`). A login is linked to its astronaut by the same email.
 
 ### 6. Configuration (optional)
-Copy `.env.example` to `.env` to change settings. Today there is one:
+Copy `.env.example` to `.env` to change settings. Settings:
 
 | Variable | Default | Meaning |
 |---|---|---|
 | `DEMO_MODE` | `False` | `True` turns on the crew switcher, the login preset buttons and the shared demo password. Leave it off for anything that is not a demo. |
+| `DEBUG` | `False` | Set `DEBUG=True` in your local `.env` for development. Leave it unset on a deploy. |
+| `SECRET_KEY` | built-in dev key | Set a long random value on a deploy. |
+| `ALLOWED_HOSTS` | `*` | Comma-separated host names. |
+| `CSRF_TRUSTED_ORIGINS` | `https://*.onrender.com` | Comma-separated origins allowed to POST over https. |
 
+### Deploying to Render
+- Build Command: `pip install -r requirements.txt && python manage.py collectstatic --noinput && python manage.py migrate && python manage.py seed_demo`
+- Start Command: `gunicorn spacepulse.wsgi:application`
+- Environment: `DEBUG=False`, `SECRET_KEY` (long random value), `DEMO_MODE=True` for a demo, and the AI keys if you use them.
+- SQLite is wiped on every deploy and `seed_demo` rebuilds the demo data each time, so this is for demos only.
 ### 7. Run Test Suite
 ```bash
 python manage.py test
