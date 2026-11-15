@@ -1,17 +1,28 @@
 from pathlib import Path
 
-from decouple import config
+from decouple import Csv, config
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-spacepulse-secret-key-deep-space-mars-2026'
+# Deploys set SECRET_KEY in the environment; the fallback is for local development only.
+SECRET_KEY = config(
+    'SECRET_KEY',
+    default='django-insecure-spacepulse-secret-key-deep-space-mars-2026',
+)
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+# Off unless the DEBUG environment variable (or a .env file) says true, so a deploy
+# is safe by default. For local development put DEBUG=True in .env.
+DEBUG = config('DEBUG', default=False, cast=bool)
 
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='*', cast=Csv())
+
+# Login and other form POSTs over https on Render are rejected without this.
+CSRF_TRUSTED_ORIGINS = config(
+    'CSRF_TRUSTED_ORIGINS', default='https://*.onrender.com', cast=Csv()
+)
 
 # DEMO_MODE turns on the shortcuts we only want for a demo: the crew switcher,
 # the one-click demo logins and the shared demo password. It is OFF unless the
@@ -36,6 +47,8 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    # Serves the collected static files when running under gunicorn.
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -106,7 +119,16 @@ USE_TZ = True
 
 # Static files (CSS, JavaScript, Images)
 STATIC_URL = 'static/'
-STATIC_ROOT = BASE_DIR / 'staticfiles'  
+STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_DIRS = [BASE_DIR / 'static']
+
+# Not the Manifest variant: the Tailwind source (static/src/input.css) has an @import that
+# the manifest step cannot resolve, which makes collectstatic fail.
+STORAGES = {
+    'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
+    'staticfiles': {
+        'BACKEND': 'whitenoise.storage.CompressedStaticFilesStorage',
+    },
+}
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
