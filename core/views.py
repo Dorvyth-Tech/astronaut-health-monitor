@@ -57,6 +57,10 @@ def get_active_astronaut(request):
     if not request.user.is_authenticated:
         return None
 
+    from core.demo import demo_astronaut, is_public_demo_user
+    if is_public_demo_user(request.user):
+        return demo_astronaut()
+
     if settings.DEMO_MODE:
         astro_id = request.session.get('active_astronaut_id')
         if astro_id:
@@ -142,6 +146,29 @@ def login_view(request):
         'next_url': next_url,
         'submitted_email': request.POST.get('email', 'amara.reyes@mission.example'),
     })
+
+
+@login_not_required
+@require_GET
+def public_demo_view(request):
+    """No-login entry for judges: sign in as a fresh read-only demo user.
+
+    404 unless PUBLIC_DEMO=True. Reuses the visitor's demo user if they already
+    have one. A real logged-in user is signed out first, so a judge never lands
+    in someone else's account.
+    """
+    from django.http import Http404
+    from core.demo import create_demo_user, demo_astronaut, is_public_demo_user, public_demo_enabled
+
+    if not public_demo_enabled():
+        raise Http404("Public demo is off.")
+    if demo_astronaut() is None:
+        raise Http404("No demo data loaded.")
+    if not is_public_demo_user(request.user):
+        if request.user.is_authenticated:
+            logout(request)
+        login(request, create_demo_user(), backend='django.contrib.auth.backends.ModelBackend')
+    return redirect('core:dashboard')
 
 
 @login_not_required

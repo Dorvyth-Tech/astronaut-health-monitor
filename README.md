@@ -144,6 +144,9 @@ Copy `.env.example` to `.env` to change settings. Settings:
 | `COMPANION_LLM_RATE_LIMIT` | `20` | Max live LLM calls per logged-in user in one window. Extra calls use the rule-based answers. |
 | `COMPANION_LLM_RATE_WINDOW` | `3600` | Rate-limit window in seconds (default one hour). Cache hits do not count. |
 
+### Public demo for judges (`/demo/`)
+Space Apps requires the demo link to open without a login. With `PUBLIC_DEMO=True`, `GET /demo/` signs the visitor in as a fresh throwaway demo user (no password) that sees the seeded commander's simulated data. Demo visitors can open every page and use Pulse, but every other write (check-in, add reading, CSV upload, acknowledge alert, baseline edits, Pulse memory notes) is refused with a "read-only demo" notice. All demo visitors share one live-model budget (`PUBLIC_DEMO_LLM_RATE_LIMIT` per hour). With `PUBLIC_DEMO` off, `/demo/` returns 404. On Render the SQLite database is rebuilt by `seed_demo` on each deploy.
+
 ### Deploying to Render
 - Build Command: `pip install -r requirements.txt && python manage.py collectstatic --noinput && python manage.py migrate && python manage.py seed_demo`
 - Start Command: `gunicorn spacepulse.wsgi:application`

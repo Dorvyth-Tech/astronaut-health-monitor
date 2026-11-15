@@ -30,6 +30,12 @@ CSRF_TRUSTED_ORIGINS = config(
 # DEMO_MODE environment variable (or a .env file) says true. See .env.example.
 DEMO_MODE = config('DEMO_MODE', default=False, cast=bool)
 
+# PUBLIC_DEMO opens /demo/: a read-only, no-login view of the seeded commander for
+# judges (core/demo.py). OFF unless the environment says true.
+PUBLIC_DEMO = config('PUBLIC_DEMO', default=False, cast=bool)
+# All demo visitors share this many live model calls per COMPANION_LLM_RATE_WINDOW.
+PUBLIC_DEMO_LLM_RATE_LIMIT = config('PUBLIC_DEMO_LLM_RATE_LIMIT', default=60, cast=int)
+
 # Companion layer 2: an optional AI model that only rephrases the rule-based answers
 # (core/llm.py). OFF by default, and always off while running tests so the test
 # suite never touches the network. Keys and provider: see .env.example.
@@ -76,6 +82,8 @@ MIDDLEWARE = [
     # (only the login and logout views are). Admin has its own login.
     'django.contrib.auth.middleware.LoginRequiredMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
+    # Public demo visitors can read but not change data (no-op unless PUBLIC_DEMO).
+    'core.demo.ReadOnlyDemoMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
