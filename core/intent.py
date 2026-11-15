@@ -15,9 +15,12 @@ Step 2 (core/llm.py, only if step 1 finds nothing and the AI is switched on):
   validated against INTENT_IDS, so the model can never invent an intent.
 Anything else is out of scope and gets the fixed reply below.
 
-Radiation / space weather: the app has no radiation data yet (the HRP radiation
-risk shows "No dosimeter data"), so there is no answer to give. Those questions
-are recognised so the reply can say so honestly, but they are never answered.
+Radiation / space weather: 'radiation' is recognised here but is not in INTENT_IDS,
+because it is only answerable when a NASA DONKI snapshot exists (core/donki.py). The
+view then answers it from that stored summary (space weather near Earth, labelled as
+context, NOT a crew dose) and only then lets the AI classifier pick it
+(RADIATION_INTENT_DESCRIPTION). With no snapshot the reply says honestly that there
+is no radiation or space-weather data yet.
 """
 
 import re
@@ -58,6 +61,9 @@ INTENT_DESCRIPTIONS = {
     'cabin_co2': "cabin air, CO2",
 }
 INTENT_IDS = tuple(INTENT_DESCRIPTIONS)
+
+# Offered to the AI classifier only while a space-weather snapshot exists.
+RADIATION_INTENT_DESCRIPTION = "space weather, solar flares, radiation or geomagnetic storms near Earth"
 
 # Questions we can answer, in the order they are listed to the person.
 SUPPORTED_QUESTIONS = (

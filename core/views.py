@@ -22,9 +22,10 @@ from core.models import AstronautProfile, Baseline, GroundMessage
 from telemetry.models import Reading, CheckIn
 from alerts.models import Alert
 from core.constants import METRIC_CONFIG, METRICS
-from core import intent
+from core import donki, intent
 from core.companion import build_companion_answers, indicator_answer
 from core.llm import rephrase_with_llm, classify_intent_with_llm
+from core.donki import get_space_weather
 from core.services import (
     baseline_details,
     get_baselines,
@@ -225,6 +226,56 @@ def _ask_pulse_out_of_scope(method, note=''):
     })
 
 
+def _space_weather_view_data():
+    """(stored view, display strings) for the space-weather card, or (None, None). Never raises."""
+    view = get_space_weather(allow_refresh=settings.SPACE_WEATHER_AUTO_REFRESH)
+    if not view:
+        return None, None
+    try:
+        return view, donki.describe(view)
+    except Exception as exc:
+        logger.warning('Space weather card skipped: %s', type(exc).__name__)
+        return None, None
+
+
+def _space_weather_answer():
+    """The Ask Pulse answer for radiation / space weather, or None when there is no data.
+
+    Built only from the stored DONKI summary (core/donki.py); the AI may only reword it.
+    """
+    view = get_space_weather(allow_refresh=settings.SPACE_WEATHER_AUTO_REFRESH)
+    if not view:
+        return None
+    try:
+        answer = donki.build_answer(view)
+    except Exception as exc:
+        logger.warning('Space weather answer skipped: %s', type(exc).__name__)
+        return None
+    if settings.COMPANION_LLM_ENABLED:
+        answer = rephrase_with_llm([answer])[0]
+    return answer
+
+
+@require_GET
+def space_weather_view(request):
+    """JSON with the NASA DONKI space-weather summary (login required).
+
+    Context only: space weather near Earth, not a measurement of crew radiation dose.
+    """
+    view, display = _space_weather_view_data()
+    if view is None:
+        return JsonResponse({'available': False, 'label': donki.LABEL, 'message': 'Space weather unavailable'})
+    return JsonResponse({
+        'available': True,
+        'label': donki.LABEL,
+        'state': view['state'],
+        'source': view['source'],
+        'fetched_at': view['fetched_at'].isoformat(),
+        'summary': view['summary'],
+        'display': display,
+    })
+
+
 @require_POST
 def companion_ask_view(request):
     """"Ask Pulse": a typed question -> one of the companion's computed answers.
@@ -257,20 +308,27 @@ def companion_ask_view(request):
     intent_id = intent.classify_by_keywords(question)
     method = intent.KEYWORD
     if intent_id is None and settings.COMPANION_LLM_ENABLED:
-        picked = classify_intent_with_llm(question, intent.INTENT_IDS, intent.INTENT_DESCRIPTIONS)
+        allowed_ids, descriptions = intent.INTENT_IDS, intent.INTENT_DESCRIPTIONS
+        # 'radiation' is offered to the model only while there is space-weather data to answer it.
+        if get_space_weather(allow_refresh=False):
+            allowed_ids = (*allowed_ids, 'radiation')
+            descriptions = {**descriptions, 'radiation': intent.RADIATION_INTENT_DESCRIPTION}
+        picked = classify_intent_with_llm(question, allowed_ids, descriptions)
         if picked:
             intent_id, method = picked[0], intent.AI
 
     if intent_id == 'radiation':
-        logger.debug('ask_pulse intent=radiation method=%s', method)
-        return _ask_pulse_out_of_scope(intent.KEYWORD, intent.NO_RADIATION_DATA_NOTE)
-    if intent_id is None:
-        logger.debug('ask_pulse intent=none')
-        return _ask_pulse_out_of_scope(intent.NONE)
-
-    answer = _ask_pulse_answer(intent_id, astronaut)
-    if answer is None:
-        return _ask_pulse_out_of_scope(intent.NONE)
+        answer = _space_weather_answer()
+        if answer is None:
+            logger.debug('ask_pulse intent=radiation method=%s no data', method)
+            return _ask_pulse_out_of_scope(intent.KEYWORD, intent.NO_RADIATION_DATA_NOTE)
+    else:
+        if intent_id is None:
+            logger.debug('ask_pulse intent=none')
+            return _ask_pulse_out_of_scope(intent.NONE)
+        answer = _ask_pulse_answer(intent_id, astronaut)
+        if answer is None:
+            return _ask_pulse_out_of_scope(intent.NONE)
     logger.debug('ask_pulse intent=%s method=%s', intent_id, method)
     public = {'ai_rephrased': False, 'ai_provider': '', **answer}
     # The label text comes from the server, like the one on the chip answers.
@@ -419,9 +477,13 @@ def dashboard_view(request):
     for answer in companion_answers:
         answer['selected'] = answer['id'] == selected_id
 
+    # Space weather (NASA DONKI): context only, never part of the status or the score above.
+    _, space_weather = _space_weather_view_data()
+
     return render(request, 'core/dashboard.html', {
         'active_nav': 'dashboard',
         'current_astronaut': astronaut,
+        'space_weather': space_weather,
         'health_score': health_score,
         'headline_summary': headline_summary,
         'metric_cards': metric_cards,

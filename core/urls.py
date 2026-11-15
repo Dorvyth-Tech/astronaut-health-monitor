@@ -12,4 +12,5 @@ urlpatterns = [
     path('ground-support/', views.ground_support_view, name='ground_support'),
     path('companion/answers/', views.companion_answers_view, name='companion_answers'),
     path('companion/ask/', views.companion_ask_view, name='companion_ask'),
+    path('space-weather/', views.space_weather_view, name='space_weather'),
 ]

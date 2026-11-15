@@ -374,6 +374,49 @@
 
     </div>
 
+    <!-- ROW 4a: Space Weather (NASA DONKI). CONTEXT ONLY: space weather near Earth, not a
+         measurement of crew radiation dose, and not part of the health status or score. -->
+    <section id="space-weather" class="w-full p-space-lg rounded-xl bg-surface-container/70 backdrop-blur-md shadow-xl flex flex-col gap-space-md border border-white/5">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-space-xs">
+          <span class="material-symbols-outlined text-primary-container text-[20px]">sunny</span>
+          <span class="font-headline-sm text-headline-sm text-on-surface font-semibold">Space Weather (NASA DONKI)</span>
+        </div>
+        <span class="font-label-caps text-label-caps uppercase {% if space_weather.is_sample %}text-[#FFB020]{% else %}text-outline{% endif %}">{% if space_weather.is_sample %}Sample data{% else %}Context only{% endif %}</span>
+      </div>
+
+      {% if space_weather %}
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-space-md">
+        <div data-space-weather="flares" class="p-space-md rounded-xl bg-surface-container-high/60 flex flex-col gap-space-xs shadow-md border border-white/5">
+          <span class="font-label-caps text-label-caps text-outline uppercase">Strongest solar flare ({{ space_weather.window_days }} days)</span>
+          <span class="font-headline-sm text-headline-sm text-on-surface font-semibold">{{ space_weather.flare_main }}</span>
+          <span class="font-body-sm text-body-sm text-on-surface-variant">{{ space_weather.flare_sub }}</span>
+        </div>
+        <div data-space-weather="sep" class="p-space-md rounded-xl bg-surface-container-high/60 flex flex-col gap-space-xs shadow-md border border-white/5">
+          <span class="font-label-caps text-label-caps text-outline uppercase">Solar energetic particle events</span>
+          <span class="font-headline-sm text-headline-sm text-on-surface font-semibold">{{ space_weather.sep_main }}</span>
+          <span class="font-body-sm text-body-sm text-on-surface-variant">{{ space_weather.sep_sub }}</span>
+        </div>
+        <div data-space-weather="kp" class="p-space-md rounded-xl bg-surface-container-high/60 flex flex-col gap-space-xs shadow-md border border-white/5">
+          <span class="font-label-caps text-label-caps text-outline uppercase">Max geomagnetic Kp</span>
+          <span class="font-headline-sm text-headline-sm text-on-surface font-semibold">{{ space_weather.kp_main }}</span>
+          <span class="font-body-sm text-body-sm text-on-surface-variant">{{ space_weather.kp_sub }}</span>
+        </div>
+      </div>
+      <p data-space-weather-status class="font-body-sm text-body-sm {% if space_weather.is_sample or space_weather.is_cached %}text-[#FFB020]{% else %}text-on-surface-variant{% endif %}">{{ space_weather.status }}</p>
+      {% else %}
+      <p data-space-weather-status class="font-body-md text-body-md text-on-surface-variant">Space weather unavailable. NASA DONKI could not be reached and nothing is stored yet.</p>
+      {% endif %}
+
+      <p class="font-label-sm text-label-sm text-outline">
+        Space weather near Earth (NASA DONKI). Context only; not a measurement of crew radiation dose.
+        <a href="https://ccmc.gsfc.nasa.gov/tools/DONKI/" target="_blank" rel="noopener noreferrer" class="underline text-primary-container">NASA DONKI</a>
+        &middot;
+        <a href="https://www.swpc.noaa.gov/noaa-scales-explanation" target="_blank" rel="noopener noreferrer" class="underline text-primary-container">NOAA G-scale</a>
+      </p>
+    </section>
+
+
     <!-- ROW 4b: Pulse Companion (full width). Fixed, rule-based answers built from the
          statuses above. No AI model yet. Chips are links (?ask=...) so they work without
          JavaScript; the small script below only swaps answers without reloading. -->

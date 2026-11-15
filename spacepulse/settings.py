@@ -24,6 +24,12 @@ DEMO_MODE = config('DEMO_MODE', default=False, cast=bool)
 # suite never touches the network. Keys and provider: see .env.example.
 COMPANION_LLM_ENABLED = config('COMPANION_LLM_ENABLED', default=False, cast=bool) and 'test' not in sys.argv
 
+# Space-weather card (core/donki.py, NASA DONKI). When True the dashboard may make ONE bounded
+# refresh call (5 s timeout) if its data is more than 30 minutes old; otherwise it only reads the
+# cache and the last stored snapshot. Always off while running tests (no network in tests).
+# The NASA key is NASA_API_KEY (falls back to DEMO_KEY); see .env.example.
+SPACE_WEATHER_AUTO_REFRESH = config('SPACE_WEATHER_AUTO_REFRESH', default=True, cast=bool) and 'test' not in sys.argv
+
 # Application definition
 
 INSTALLED_APPS = [
