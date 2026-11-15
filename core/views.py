@@ -10,13 +10,16 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_not_required
 from django.contrib.auth.models import User
 from django.contrib import messages
+from django.db.models import Count
 from django.http import JsonResponse
 from django.utils import timezone
+from django.views.decorators.http import require_GET
 
 from core.models import AstronautProfile, Baseline, GroundMessage
 from telemetry.models import Reading, CheckIn
 from alerts.models import Alert
 from core.constants import METRIC_CONFIG, METRICS
+from core.companion import build_companion_answers
 from core.services import (
     baseline_details,
     get_baselines,
@@ -140,6 +143,39 @@ def logout_view(request):
     if 'active_astronaut_id' in request.session:
         del request.session['active_astronaut_id']
     return redirect('core:login')
+
+
+def companion_answers_for(astronaut, metric_evals, health_score):
+    """The companion's answers for one astronaut (layer 1: fixed rules, no AI model).
+
+    This is the one place that gathers the numbers from the database and hands them
+    to core/companion.py. Layer 2 (an optional AI rephrase, see the docstring in
+    core/companion.py) would be called right here, on the returned list.
+    """
+    rows = (
+        Reading.objects.filter(astronaut=astronaut, metric__in=METRICS)
+        .values('source')
+        .annotate(n=Count('id'))
+    )
+    source_counts = {row['source']: row['n'] for row in rows}
+    open_alerts = Alert.objects.filter(astronaut=astronaut, acknowledged=False).count()
+    return build_companion_answers(metric_evals, health_score, source_counts, open_alerts)
+
+
+@require_GET
+def companion_answers_view(request):
+    """JSON with the companion's answers for the logged-in astronaut (login required).
+
+    Only get_active_astronaut's astronaut is ever used, so nobody can ask about
+    someone else's data. The dashboard shows the same answers in HTML.
+    """
+    astronaut = get_active_astronaut(request)
+    if not astronaut:
+        return JsonResponse({'error': 'No astronaut profile for this login.'}, status=403)
+
+    metric_evals = evaluate_astronaut_metrics(astronaut)
+    health_score = calculate_health_score(metric_evals)
+    return JsonResponse({'answers': companion_answers_for(astronaut, metric_evals, health_score)})
 
 
 def dashboard_view(request):
@@ -268,6 +304,14 @@ def dashboard_view(request):
     # Baseline for sleep in chart
     sleep_baseline = baselines.get('sleep', 7.2)
 
+    # Companion panel. Chips are plain links (?ask=<id>), so they work without JavaScript.
+    companion_answers = companion_answers_for(astronaut, metric_evals, health_score)
+    selected_id = request.GET.get('ask')
+    if selected_id not in [answer['id'] for answer in companion_answers]:
+        selected_id = 'overall'
+    for answer in companion_answers:
+        answer['selected'] = answer['id'] == selected_id
+
     return render(request, 'core/dashboard.html', {
         'active_nav': 'dashboard',
         'current_astronaut': astronaut,
@@ -276,6 +320,7 @@ def dashboard_view(request):
         'metric_cards': metric_cards,
         'risk_vectors': risk_vectors,
         'active_alerts': active_alerts,
+        'companion_answers': companion_answers,
         'sleep_baseline': sleep_baseline,
         'next_ground_pass': 'T-01:14:22',
         'comm_latency': '18m 42s',

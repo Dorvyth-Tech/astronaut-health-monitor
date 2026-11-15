@@ -374,6 +374,72 @@
 
     </div>
 
+    <!-- ROW 4b: Pulse Companion (full width). Fixed, rule-based answers built from the
+         statuses above. No AI model yet. Chips are links (?ask=...) so they work without
+         JavaScript; the small script below only swaps answers without reloading. -->
+    <section id="companion" class="w-full p-space-lg rounded-xl bg-surface-container/70 backdrop-blur-md shadow-xl flex flex-col gap-space-md border border-white/5">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-space-xs">
+          <span class="material-symbols-outlined text-primary-container text-[20px]">support_agent</span>
+          <span class="font-headline-sm text-headline-sm text-on-surface font-semibold">Pulse Companion</span>
+        </div>
+        <span class="font-label-caps text-label-caps text-outline uppercase">Rule-based answers</span>
+      </div>
+
+      <!-- Question chips -->
+      <div class="flex flex-wrap gap-space-sm">
+        {% for item in companion_answers %}
+        <a href="?ask={{ item.id }}#companion" data-companion-chip="{{ item.id }}"
+           class="px-space-md py-space-xs rounded-full font-body-sm text-body-sm transition-all border {% if item.selected %}bg-primary-container/10 text-primary-container border-primary-container/40{% else %}bg-surface-container-high text-on-surface-variant border-white/5 hover:bg-surface-bright{% endif %}">
+          {{ item.question }}
+        </a>
+        {% endfor %}
+      </div>
+
+      <!-- Answers: all are in the page, only the selected one is visible -->
+      {% for item in companion_answers %}
+      <div data-companion-answer="{{ item.id }}"
+           class="{% if not item.selected %}hidden {% endif %}p-space-md rounded-xl bg-surface-container-high/60 relative overflow-hidden flex flex-col gap-space-xs shadow-md border border-white/5">
+        <div class="absolute left-0 top-0 bottom-0 w-1 {% if item.severity == 'caution' %}bg-[#FFB020]{% elif item.severity == 'critical' %}bg-error{% elif item.severity == 'nominal' %}bg-[#22E3A0]{% else %}bg-outline{% endif %}"></div>
+
+        <p class="font-body-md text-body-md text-on-surface pl-space-xs">{{ item.answer }}</p>
+
+        {% if item.escalation %}
+        <p class="font-headline-sm text-headline-sm text-error font-semibold pl-space-xs">{{ item.escalation }}</p>
+        {% endif %}
+
+        <p class="font-body-sm text-body-sm text-on-surface-variant pl-space-xs">
+          <span class="text-outline">Source:</span> {{ item.source }}
+        </p>
+
+        {% if item.simulated_note %}
+        <p class="font-body-sm text-body-sm text-[#FFB020] pl-space-xs">{{ item.simulated_note }}</p>
+        {% endif %}
+
+        <p class="font-label-sm text-label-sm text-outline pl-space-xs">{{ item.disclaimer }}</p>
+      </div>
+      {% endfor %}
+    </section>
+
+    <script>
+      // Optional extras: show the clicked chip's answer without reloading the page.
+      // Without JavaScript the chips are normal links and the server picks the answer.
+      document.querySelectorAll('[data-companion-chip]').forEach(function (chip) {
+        chip.addEventListener('click', function (event) {
+          event.preventDefault();
+          var id = chip.dataset.companionChip;
+          document.querySelectorAll('[data-companion-answer]').forEach(function (box) {
+            box.classList.toggle('hidden', box.dataset.companionAnswer !== id);
+          });
+          document.querySelectorAll('[data-companion-chip]').forEach(function (other) {
+            var on = other === chip;
+            ['bg-primary-container/10', 'text-primary-container', 'border-primary-container/40'].forEach(function (c) { other.classList.toggle(c, on); });
+            ['bg-surface-container-high', 'text-on-surface-variant', 'border-white/5'].forEach(function (c) { other.classList.toggle(c, !on); });
+          });
+        });
+      });
+    </script>
+
     <!-- ROW 5: Mission Progress Bar (full width) -->
     <div class="w-full p-space-lg rounded-xl bg-surface-container/70 backdrop-blur-md shadow-xl flex flex-col gap-space-sm border border-white/5">
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
