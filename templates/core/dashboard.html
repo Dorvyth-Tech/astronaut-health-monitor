@@ -396,6 +396,21 @@
         {% endfor %}
       </div>
 
+      <!-- Ask Pulse: type a question. It is matched to one of the answers above (never a free
+           chatbot reply); anything else gets a fixed "I can only answer ..." message. -->
+      <form id="companion-ask-form" action="{% url 'core:companion_ask' %}" method="post" class="flex flex-col sm:flex-row gap-space-sm" novalidate>
+        {% csrf_token %}
+        <label for="companion-ask-input" class="sr-only">Ask Pulse a question about your monitored indicators</label>
+        <input id="companion-ask-input" name="question" type="text" maxlength="300" autocomplete="off"
+               placeholder="Ask Pulse about your indicators, e.g. &quot;Am I sleeping enough?&quot;"
+               class="flex-1 px-space-md py-space-xs rounded-full font-body-sm text-body-sm bg-surface-container-high text-on-surface placeholder:text-outline border border-white/5 focus:outline-none focus:border-primary-container/40">
+        <button id="companion-ask-button" type="submit"
+                class="px-space-md py-space-xs rounded-full font-body-sm text-body-sm transition-all border bg-primary-container/10 text-primary-container border-primary-container/40 hover:bg-primary-container/20">
+          Ask
+        </button>
+      </form>
+      <div id="companion-ask-result" aria-live="polite" class="hidden"></div>
+
       <!-- Answers: all are in the page, only the selected one is visible -->
       {% for item in companion_answers %}
       <div data-companion-answer="{{ item.id }}"
@@ -431,6 +446,8 @@
         chip.addEventListener('click', function (event) {
           event.preventDefault();
           var id = chip.dataset.companionChip;
+          var askResult = document.getElementById('companion-ask-result');
+          if (askResult) { askResult.classList.add('hidden'); }
           document.querySelectorAll('[data-companion-answer]').forEach(function (box) {
             box.classList.toggle('hidden', box.dataset.companionAnswer !== id);
           });
@@ -441,6 +458,97 @@
           });
         });
       });
+
+      // Ask Pulse: send the typed question, show the matched answer (built with textContent only).
+      (function () {
+        var form = document.getElementById('companion-ask-form');
+        if (!form) { return; }
+        var input = document.getElementById('companion-ask-input');
+        var button = document.getElementById('companion-ask-button');
+        var result = document.getElementById('companion-ask-result');
+        var barColors = { caution: 'bg-[#FFB020]', critical: 'bg-error', nominal: 'bg-[#22E3A0]' };
+
+        function add(box, tag, classes, text) {
+          var el = document.createElement(tag);
+          el.className = classes;
+          el.textContent = text;
+          box.appendChild(el);
+          return el;
+        }
+
+        function show(build) {
+          document.querySelectorAll('[data-companion-answer]').forEach(function (box) { box.classList.add('hidden'); });
+          result.textContent = '';
+          var box = document.createElement('div');
+          box.className = 'p-space-md rounded-xl bg-surface-container-high/60 relative overflow-hidden flex flex-col gap-space-xs shadow-md border border-white/5';
+          build(box);
+          result.appendChild(box);
+          result.classList.remove('hidden');
+        }
+
+        function showMessage(text) {
+          show(function (box) {
+            add(box, 'p', 'font-body-md text-body-md text-on-surface pl-space-xs', text);
+          });
+        }
+
+        function showAnswer(a) {
+          show(function (box) {
+            add(box, 'div', 'absolute left-0 top-0 bottom-0 w-1 ' + (barColors[a.severity] || 'bg-outline'), '');
+            add(box, 'p', 'font-body-md text-body-md text-on-surface pl-space-xs', a.answer);
+            if (a.ai_rephrased) {
+              add(box, 'p', 'font-label-sm text-label-sm text-outline pl-space-xs', a.ai_label);
+            }
+            if (a.escalation) {
+              add(box, 'p', 'font-headline-sm text-headline-sm text-error font-semibold pl-space-xs', a.escalation);
+            }
+            var src = add(box, 'p', 'font-body-sm text-body-sm text-on-surface-variant pl-space-xs', '');
+            add(src, 'span', 'text-outline', 'Source:');
+            src.appendChild(document.createTextNode(' ' + a.source));
+            if (a.simulated_note) {
+              add(box, 'p', 'font-body-sm text-body-sm text-[#FFB020] pl-space-xs', a.simulated_note);
+            }
+            add(box, 'p', 'font-label-sm text-label-sm text-outline pl-space-xs', a.disclaimer);
+          });
+        }
+
+        function showOutOfScope(data) {
+          show(function (box) {
+            add(box, 'p', 'font-body-md text-body-md text-on-surface pl-space-xs', data.message);
+            add(box, 'p', 'font-label-sm text-label-sm text-outline pl-space-xs', 'You can ask, for example:');
+            var list = add(box, 'div', 'flex flex-wrap gap-space-sm pl-space-xs', '');
+            (data.supported_questions || []).forEach(function (q) {
+              var chip = add(list, 'button', 'px-space-md py-space-xs rounded-full font-body-sm text-body-sm transition-all border bg-surface-container-high text-on-surface-variant border-white/5 hover:bg-surface-bright', q);
+              chip.type = 'button';
+              chip.addEventListener('click', function () { input.value = q; ask(); });
+            });
+          });
+        }
+
+        function ask() {
+          var question = input.value.trim();
+          if (!question) { showMessage('Type a question first.'); return; }
+          button.disabled = true;
+          showMessage('Thinking...');
+          var token = form.querySelector('[name=csrfmiddlewaretoken]').value;
+          fetch(form.action, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': token },
+            body: JSON.stringify({ question: question })
+          }).then(function (response) {
+            return response.json().then(function (data) { return { ok: response.ok, data: data }; });
+          }).then(function (res) {
+            if (!res.ok) { showMessage(res.data.error || 'Sorry, I could not answer that right now.'); }
+            else if (res.data.out_of_scope) { showOutOfScope(res.data); }
+            else { showAnswer(res.data.answer); }
+          }).catch(function () {
+            showMessage('I could not reach the server. Please try again in a moment.');
+          }).then(function () { button.disabled = false; });
+        }
+
+        form.addEventListener('submit', function (event) { event.preventDefault(); ask(); });
+      })();
     </script>
 
     <!-- ROW 5: Mission Progress Bar (full width) -->

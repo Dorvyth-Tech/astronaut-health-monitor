@@ -2,6 +2,9 @@
 Core views for Space-Pulse: Dashboard, Login, Logout, Profile, Ground Support.
 """
 
+import json
+import logging
+
 from django.conf import settings
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse
@@ -13,14 +16,15 @@ from django.contrib import messages
 from django.db.models import Count
 from django.http import JsonResponse
 from django.utils import timezone
-from django.views.decorators.http import require_GET
+from django.views.decorators.http import require_GET, require_POST
 
 from core.models import AstronautProfile, Baseline, GroundMessage
 from telemetry.models import Reading, CheckIn
 from alerts.models import Alert
 from core.constants import METRIC_CONFIG, METRICS
-from core.companion import build_companion_answers
-from core.llm import rephrase_with_llm
+from core import intent
+from core.companion import build_companion_answers, indicator_answer
+from core.llm import rephrase_with_llm, classify_intent_with_llm
 from core.services import (
     baseline_details,
     get_baselines,
@@ -34,6 +38,7 @@ from core.services import (
     sync_alerts_for_astronaut,
 )
 
+logger = logging.getLogger(__name__)
 
 # The shared password of the seeded demo accounts. Outside DEMO_MODE it is just
 # the real password of those accounts; it is never a master key (see login_view).
@@ -181,6 +186,103 @@ def companion_answers_view(request):
     metric_evals = evaluate_astronaut_metrics(astronaut)
     health_score = calculate_health_score(metric_evals)
     return JsonResponse({'answers': companion_answers_for(astronaut, metric_evals, health_score)})
+
+
+def _ask_pulse_answer(intent_id, astronaut):
+    """The computed companion answer for one intent id, or None if there is none.
+
+    Always built by core/companion.py from the astronaut's own computed results.
+    When the AI is on, rephrase_with_llm only rewords it (same safety checks as the chips).
+    """
+    metric_evals = evaluate_astronaut_metrics(astronaut)
+    health_score = calculate_health_score(metric_evals)
+    answers = companion_answers_for(astronaut, metric_evals, health_score)
+
+    wanted = intent_id if intent_id in ('overall', 'what_to_do', 'data_source') else f'why_{intent_id}'
+    for answer in answers:
+        if answer['id'] == wanted:
+            return answer
+
+    # A nominal indicator has no chip, so build its answer from its own evaluation.
+    if intent_id in intent.INDICATOR_LABELS and intent_id in metric_evals:
+        simulated_note = answers[0].get('simulated_note', '') if answers else ''
+        answer = indicator_answer(intent_id, metric_evals[intent_id], simulated_note)
+        if settings.COMPANION_LLM_ENABLED:
+            answer = rephrase_with_llm([answer])[0]
+        return answer
+    return None
+
+
+def _ask_pulse_out_of_scope(method, note=''):
+    message = f"{note} {intent.OUT_OF_SCOPE_MESSAGE}".strip()
+    return JsonResponse({
+        'matched_id': None,
+        'method': method,
+        'answer': None,
+        'out_of_scope': True,
+        'message': message,
+        'supported_questions': list(intent.SUPPORTED_QUESTIONS),
+    })
+
+
+@require_POST
+def companion_ask_view(request):
+    """"Ask Pulse": a typed question -> one of the companion's computed answers.
+
+    NOT a chatbot. The text is only classified into a fixed intent (keywords first,
+    then, if the AI is on and nothing matched, the model picks from the same list and
+    its choice is validated). The reply is always the computed answer for that intent,
+    or a fixed out-of-scope message. Login and CSRF protected; only the logged-in
+    user's astronaut is ever used. The question text is never logged.
+
+    Accepts a form field or JSON: {"question": "..."}.
+    """
+    astronaut = get_active_astronaut(request)
+    if not astronaut:
+        return JsonResponse({'error': 'No astronaut profile for this login.'}, status=403)
+
+    if request.content_type == 'application/json':
+        try:
+            body = json.loads(request.body or b'{}')
+        except ValueError:
+            return JsonResponse({'error': 'Send JSON like {"question": "..."}.'}, status=400)
+        raw_question = body.get('question') if isinstance(body, dict) else None
+    else:
+        raw_question = request.POST.get('question')
+
+    question, error = intent.clean_question(raw_question)
+    if error:
+        return JsonResponse({'error': error}, status=400)
+
+    intent_id = intent.classify_by_keywords(question)
+    method = intent.KEYWORD
+    if intent_id is None and settings.COMPANION_LLM_ENABLED:
+        picked = classify_intent_with_llm(question, intent.INTENT_IDS, intent.INTENT_DESCRIPTIONS)
+        if picked:
+            intent_id, method = picked[0], intent.AI
+
+    if intent_id == 'radiation':
+        logger.debug('ask_pulse intent=radiation method=%s', method)
+        return _ask_pulse_out_of_scope(intent.KEYWORD, intent.NO_RADIATION_DATA_NOTE)
+    if intent_id is None:
+        logger.debug('ask_pulse intent=none')
+        return _ask_pulse_out_of_scope(intent.NONE)
+
+    answer = _ask_pulse_answer(intent_id, astronaut)
+    if answer is None:
+        return _ask_pulse_out_of_scope(intent.NONE)
+    logger.debug('ask_pulse intent=%s method=%s', intent_id, method)
+    public = {'ai_rephrased': False, 'ai_provider': '', **answer}
+    # The label text comes from the server, like the one on the chip answers.
+    public['ai_label'] = f"Rephrased by AI ({public['ai_provider']})" if public['ai_rephrased'] else ''
+    return JsonResponse({
+        'matched_id': answer['id'],
+        'method': method,
+        'answer': public,
+        'out_of_scope': False,
+        'message': '',
+        'supported_questions': [],
+    })
 
 
 def dashboard_view(request):

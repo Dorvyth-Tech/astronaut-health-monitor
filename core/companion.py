@@ -20,6 +20,8 @@ and it falls back to these exact answers on any failure or unsafe rewrite.
 
 Each answer is a dict with these keys:
   id              short stable name: overall, why_<indicator>, what_to_do, data_source
+                  (plus status_<indicator>, built only for "Ask Pulse" when an indicator is
+                  nominal and so has no why_ answer, see indicator_answer)
   question        the chip text
   answer          the friendly text
   indicator       the indicator key (e.g. 'sleep') or None for general answers
@@ -227,6 +229,23 @@ def _data_source(source_counts, simulated_note):
              "and the 150 min/week exercise plan is a team assumption.")
     return _make_answer('data_source', "Where does this data come from?", text, INFO,
                         source=DEFAULT_SOURCE, simulated_note=simulated_note)
+
+
+def indicator_answer(key, ev, simulated_note=''):
+    """The answer for ONE indicator, whatever its status (used by "Ask Pulse").
+
+    Caution, critical and no data are exactly the 'why_<key>' answer from the chips.
+    A nominal indicator has no chip, so it gets 'status_<key>': its own rule sentence
+    plus a plain "within your baseline rules". Same shape, nothing invented.
+    """
+    if ev['status'] != NOMINAL:
+        return _why(key, ev, simulated_note)
+    label = ev['display_label']
+    text = f"Good news: {label} is within your baseline rules. {ev['reason']}"
+    if key == 'mood':
+        text += " " + MOOD_NOTE
+    return _make_answer(f'status_{key}', f"How is {label}?", text, NOMINAL, indicator=key,
+                        source=source_for(key), simulated_note=simulated_note)
 
 
 # =========================================================================
