@@ -110,8 +110,8 @@ SIMULATION_PROFILES = {
 # Designed for easy explanation to judges and students:
 # - Solar Flare (FLR): X-class = High, M-class = Moderate, C/B/A = Low.
 # - Geomagnetic Storm (GST): Kp >= 7 = High (G3-G5), Kp 5-6 = Moderate (G1-G2), Kp < 5 = Low.
-# - Coronal Mass Ejection (CME): speed >= 1000 km/s = High, 500-1000 km/s = Moderate, <500 = Low.
-# - Solar Energetic Particle (SEP): high-energy proton streams = High.
+# CME and solar-particle events are retained for display, but left unclassified until
+# mission-approved criteria are available.
 # ==============================================================================
 SEVERITY_RULES = {
     'flare': {
@@ -124,24 +124,17 @@ SEVERITY_RULES = {
         'moderate': lambda kp: 5.0 <= kp < 7.0,
         'low': lambda kp: kp < 5.0,
     },
-    'cme': {
-        'high': lambda speed: speed >= 1000.0,
-        'moderate': lambda speed: 500.0 <= speed < 1000.0,
-        'low': lambda speed: speed < 500.0,
-    },
-    'solar_particle': {
-        'high': lambda _: True,  # Any unshielded interplanetary SEP event carries acute radiation danger
-        'moderate': lambda _: False,
-        'low': lambda _: False,
-    },
 }
 
 
 def map_severity(event_type, raw_data):
     """
-    Evaluates raw space weather event metrics and maps them to: 'low', 'moderate', or 'high'.
+    Maps supported event metrics to low/moderate/high; otherwise leaves them unclassified.
     """
     event_type = event_type.lower()
+    if event_type in ('cme', 'solar_particle'):
+        return 'unclassified'
+
     rules = SEVERITY_RULES.get(event_type)
 
     if not rules:
@@ -179,37 +172,13 @@ def map_severity(event_type, raw_data):
             return 'moderate'
         return 'low'
 
-    elif event_type == 'cme':
-        speed = 0.0
-        if isinstance(raw_data, dict):
-            analyses = raw_data.get('cmeAnalyses', [])
-            if analyses:
-                speed = max(float(a.get('speed', 0.0) or 0.0) for a in analyses)
-            else:
-                speed = float(raw_data.get('intensity', 0.0) or 0.0)
-        else:
-            try:
-                speed = float(raw_data)
-            except (ValueError, TypeError):
-                speed = 0.0
-
-        if rules['high'](speed):
-            return 'high'
-        if rules['moderate'](speed):
-            return 'moderate'
-        return 'low'
-
-    elif event_type == 'solar_particle':
-        return 'high'
-
     return 'low'
 
 
 def calculate_radiation_level(location):
     """
-    Computes ambient ionizing radiation flux for a location.
-    Starts from the physics baseline (orbit/moon/mars/earth) and elevates it
-    when active moderate or high space weather events have occurred in the last 48 hours.
+    Returns a prototype radiation estimate from a location baseline and classified,
+    non-sample NASA event context. This is not a direct dosimeter measurement.
     Returns: (radiation_level: float, source_label: str, causal_event: str or None)
     """
     location = location.lower()
@@ -230,6 +199,7 @@ def calculate_radiation_level(location):
     active_events = list(
         SpaceWeatherEvent.objects.filter(
             start_time__gte=cutoff,
+            is_sample=False,
             severity__in=['moderate', 'high']
         ).order_by('-start_time')
     )
@@ -321,7 +291,7 @@ def fetch_space_weather(days=7):
         ).order_by('-start_time')
     )
 
-    # If no events found after query, provide seeded sample events for demo realism
+    # If no events found after query, provide clearly labelled sample events for demos.
     if not events:
         _seed_realistic_donki_sample_events()
         events = list(
@@ -333,7 +303,7 @@ def fetch_space_weather(days=7):
     # Cache for 30 minutes
     cache.set(cache_key, {'events': events, 'api_available': api_available}, timeout=1800)
 
-    # Generate an EnvironmentAlert for each moderate/high event
+    # Only classified, non-sample NASA events can generate environment alerts.
     _sync_space_weather_alerts(events)
 
     return events, api_available
@@ -378,13 +348,14 @@ def _process_donki_records(event_type, records):
                 'intensity': intensity,
                 'summary': summary,
                 'severity': severity,
+                'is_sample': False,
                 'fetched_at': timezone.now(),
             }
         )
 
 
 def _seed_realistic_donki_sample_events():
-    """Seeds plausible NASA DONKI space weather events for demo & testing."""
+    """Seeds clearly labelled sample events for demo and offline use."""
     now = timezone.now()
     sample_records = [
         {
@@ -392,36 +363,37 @@ def _seed_realistic_donki_sample_events():
             'external_id': f"{now.strftime('%Y-%m-%d')}T14:22:00-FLR-001",
             'start_time': now - timedelta(hours=14),
             'intensity': 'X1.8',
-            'summary': 'Major X1.8 solar flare erupting from active sunspot region AR3664. Associated with R3 strong HF radio blackout.',
-            'severity': 'high',
+            'summary': 'SAMPLE DATA — X1.8 solar flare example for interface demonstration.',
+            'severity': 'unclassified',
         },
         {
             'event_type': 'geomagnetic_storm',
             'external_id': f"{(now - timedelta(days=2)).strftime('%Y-%m-%d')}T08:15:00-GST-001",
             'start_time': now - timedelta(days=2, hours=3),
             'intensity': 'Kp 6.3',
-            'summary': 'G2 moderate geomagnetic storm resulting from halo CME arrival. Interplanetary magnetic field southward tilt observed.',
-            'severity': 'moderate',
+            'summary': 'SAMPLE DATA — Kp 6.3 geomagnetic-storm example for interface demonstration.',
+            'severity': 'unclassified',
         },
         {
             'event_type': 'cme',
             'external_id': f"{(now - timedelta(days=3)).strftime('%Y-%m-%d')}T20:45:00-CME-001",
             'start_time': now - timedelta(days=3, hours=5),
             'intensity': '820 km/s',
-            'summary': 'Partial halo coronal mass ejection observed by SOHO/LASCO C3 coronagraph. Earth/Mars transit trajectory.',
-            'severity': 'moderate',
+            'summary': 'SAMPLE DATA — CME speed example; this prototype does not assess crew risk from CME speed.',
+            'severity': 'unclassified',
         },
         {
             'event_type': 'solar_particle',
             'external_id': f"{(now - timedelta(days=5)).strftime('%Y-%m-%d')}T11:00:00-SEP-001",
             'start_time': now - timedelta(days=5, hours=2),
             'intensity': 'S2 Event (>10 MeV)',
-            'summary': 'GOES-16 detected energetic proton flux exceeding 100 pfu threshold. Biological astronaut hazard active outside magnetosphere.',
-            'severity': 'high',
+            'summary': 'SAMPLE DATA — solar-particle event example; severity is not assessed by this prototype.',
+            'severity': 'unclassified',
         },
     ]
 
     for s in sample_records:
+        s['is_sample'] = True
         SpaceWeatherEvent.objects.update_or_create(
             external_id=s['external_id'],
             defaults=s
@@ -429,13 +401,13 @@ def _seed_realistic_donki_sample_events():
 
 
 def _sync_space_weather_alerts(events):
-    """Creates EnvironmentAlert instances for active moderate or high space weather events."""
+    """Creates alerts for classified NASA events; samples and unclassified events are informational."""
     reading = EnvironmentReading.objects.filter(location__in=['orbit', 'moon', 'mars']).order_by('-timestamp').first()
     if not reading:
         return
 
     for e in events:
-        if e.severity in ('moderate', 'high'):
+        if not e.is_sample and e.severity in ('moderate', 'high'):
             sev_label = 'danger' if e.severity == 'high' else 'caution'
             msg = f"NASA Space Weather [{e.get_severity_display()}]: {e.intensity} {e.get_event_type_display()}. {e.plain_language_advice}"
             # Check if this alert was already logged to prevent duplicates

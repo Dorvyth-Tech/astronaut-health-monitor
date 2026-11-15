@@ -141,6 +141,7 @@ def environment_api_view(request):
             'intensity': e.intensity,
             'severity': e.severity,
             'severity_display': e.get_severity_display(),
+            'is_sample': e.is_sample,
             'start_time': e.start_time.isoformat(),
             'time_display': e.start_time.strftime('%d %b %H:%M UTC'),
             'advice': e.plain_language_advice,
@@ -255,6 +256,7 @@ def space_weather_api_view(request):
             'summary': e.summary,
             'severity': e.severity,
             'severity_display': e.get_severity_display(),
+            'is_sample': e.is_sample,
             'advice': e.plain_language_advice,
         }
         for e in events

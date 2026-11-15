@@ -160,6 +160,7 @@
             <div class="w-full h-1.5 bg-surface-container-highest rounded-full overflow-hidden">
               <div class="h-full bg-primary-fixed rounded-full" style="width: {{ physio_reserve|default:88.4 }}%;"></div>
             </div>
+            <span class="font-label-caps text-[9px] text-outline uppercase" title="Team-defined composite of recent sleep, HRV and resting HR. Not a clinical metric and not used in the official health score or alerts.">Experimental · not a validated measure</span>
           </div>
         </div>
       </div>
@@ -195,10 +196,10 @@
 
           <!-- SVG Chart for Sleep Duration -->
           <div class="my-space-md relative w-full h-36 flex flex-col justify-end">
-            <!-- Amber Threshold line indicator at 6.0h -->
+            <!-- Amber guide: more than 1 h below the crew member's baseline -->
             <div class="absolute inset-x-0 top-1/2 flex items-center justify-between pointer-events-none opacity-40">
               <div class="w-full h-px bg-error stroke-dashed"></div>
-              <span class="text-[9px] font-label-caps text-error bg-surface-container-low px-1">ALERT THRESHOLD (6.0h)</span>
+              <span class="text-[9px] font-label-caps text-error bg-surface-container-low px-1">AMBER: 1 h below baseline</span>
             </div>
             <svg class="w-full h-28 overflow-visible" preserveAspectRatio="none" viewBox="0 0 350 90">
               <defs>
@@ -236,7 +237,7 @@
               <span class="material-symbols-outlined text-[16px]">warning</span>
               4-day negative deviation ({{ sleep_delta|default:"-1.4" }}h)
             </span>
-            <span class="font-label-caps text-[11px] text-outline">Threshold: &lt;6.0h</span>
+            <span class="font-label-caps text-[11px] text-outline">{% if sleep_caution_low %}Threshold: {{ sleep_caution_low|floatformat:1 }}h (1 h below baseline){% else %}Threshold: 1 h below baseline{% endif %}</span>
           </div>
         </div>
 

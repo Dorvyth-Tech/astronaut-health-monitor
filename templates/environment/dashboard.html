@@ -1,4 +1,4 @@
-{% extends 'base.html' %}
+{% extends "base.html" %}
 {% load static %}
 
 {% block title %}Environment Monitor &amp; NASA Space Weather Surveillance | Space-Pulse{% endblock %}
@@ -35,7 +35,7 @@
         <span class="font-mono text-xs uppercase tracking-wider font-bold">API Unavailable &mdash; Cached Data</span>
       </div>
 
-      <button onclick="refreshEnvironmentData()"
+      <button type="button" onclick="refreshEnvironmentData()"
               id="refresh-btn"
               class="px-space-md py-1.5 rounded-xl bg-surface-container-high hover:bg-surface-container-highest text-on-surface text-xs font-mono uppercase tracking-wider flex items-center gap-2 border border-white/5 transition-all">
         <span class="material-symbols-outlined text-[16px] text-primary-container" id="refresh-icon">sync</span>
@@ -63,27 +63,27 @@
 
   <!-- Planetary Location Tabs -->
   <div class="flex flex-wrap items-center gap-space-xs p-1.5 rounded-2xl bg-surface-container-low border border-white/5">
-    <button onclick="switchLocation('earth')"
+    <button type="button" onclick="switchLocation('earth')"
             id="tab-earth"
             class="tab-btn px-space-md py-space-xs rounded-xl font-headline-sm text-xs uppercase tracking-wider transition-all flex items-center gap-2 bg-primary-container text-on-primary-container shadow-md">
       <span class="material-symbols-outlined text-[16px]">public</span>
       Earth (Cape Canaveral)
     </button>
-    <button onclick="switchLocation('orbit')"
+    <button type="button" onclick="switchLocation('orbit')"
             id="tab-orbit"
             class="tab-btn px-space-md py-space-xs rounded-xl font-headline-sm text-xs uppercase tracking-wider transition-all flex items-center gap-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high">
       <span class="material-symbols-outlined text-[16px]">satellite</span>
       Orbit (ISS / Dragon)
       <span class="px-1.5 py-0.5 rounded text-[9px] bg-white/10 text-outline">NASA Live + Sim</span>
     </button>
-    <button onclick="switchLocation('moon')"
+    <button type="button" onclick="switchLocation('moon')"
             id="tab-moon"
             class="tab-btn px-space-md py-space-xs rounded-xl font-headline-sm text-xs uppercase tracking-wider transition-all flex items-center gap-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high">
       <span class="material-symbols-outlined text-[16px]">dark_mode</span>
       Moon (Artemis Base)
       <span class="px-1.5 py-0.5 rounded text-[9px] bg-white/10 text-outline">NASA Live + Sim</span>
     </button>
-    <button onclick="switchLocation('mars')"
+    <button type="button" onclick="switchLocation('mars')"
             id="tab-mars"
             class="tab-btn px-space-md py-space-xs rounded-xl font-headline-sm text-xs uppercase tracking-wider transition-all flex items-center gap-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high">
       <span class="material-symbols-outlined text-[16px]">planet</span>
@@ -254,32 +254,32 @@
 
       <!-- Metric Chart Selectors -->
       <div class="flex flex-wrap items-center gap-1.5 p-1 rounded-xl bg-surface-container-high border border-white/5">
-        <button onclick="setChartMetric('temperature')"
+        <button type="button" onclick="setChartMetric('temperature')"
                 id="btn-metric-temp"
                 class="chart-metric-btn px-2.5 py-1 rounded-lg text-xs font-mono uppercase tracking-wider bg-primary-container text-on-primary-container font-semibold transition-all">
           Temp
         </button>
-        <button onclick="setChartMetric('pressure')"
+        <button type="button" onclick="setChartMetric('pressure')"
                 id="btn-metric-press"
                 class="chart-metric-btn px-2.5 py-1 rounded-lg text-xs font-mono uppercase tracking-wider text-on-surface-variant hover:text-on-surface transition-all">
           Pressure
         </button>
-        <button onclick="setChartMetric('humidity')"
+        <button type="button" onclick="setChartMetric('humidity')"
                 id="btn-metric-hum"
                 class="chart-metric-btn px-2.5 py-1 rounded-lg text-xs font-mono uppercase tracking-wider text-on-surface-variant hover:text-on-surface transition-all">
           Humidity
         </button>
-        <button onclick="setChartMetric('oxygen_percent')"
+        <button type="button" onclick="setChartMetric('oxygen_percent')"
                 id="btn-metric-o2"
                 class="chart-metric-btn px-2.5 py-1 rounded-lg text-xs font-mono uppercase tracking-wider text-on-surface-variant hover:text-on-surface transition-all">
           Oxygen
         </button>
-        <button onclick="setChartMetric('co2_ppm')"
+        <button type="button" onclick="setChartMetric('co2_ppm')"
                 id="btn-metric-co2"
                 class="chart-metric-btn px-2.5 py-1 rounded-lg text-xs font-mono uppercase tracking-wider text-on-surface-variant hover:text-on-surface transition-all">
           CO₂
         </button>
-        <button onclick="setChartMetric('radiation_level')"
+        <button type="button" onclick="setChartMetric('radiation_level')"
                 id="btn-metric-rad"
                 class="chart-metric-btn px-2.5 py-1 rounded-lg text-xs font-mono uppercase tracking-wider text-on-surface-variant hover:text-on-surface transition-all">
           Radiation
@@ -332,7 +332,7 @@
             {% if nasa_api_available %}NASA Live DONKI{% else %}NASA Data Cached{% endif %}
           </span>
         </div>
-        <button onclick="refreshSpaceWeatherData()"
+        <button type="button" onclick="refreshSpaceWeatherData()"
                 id="sw-refresh-btn"
                 class="px-2.5 py-1 rounded-xl bg-surface-container-high hover:bg-surface-container-highest text-primary-container text-xs font-mono uppercase tracking-wider flex items-center gap-1 border border-white/5 transition-all">
           <span class="material-symbols-outlined text-[14px]" id="sw-refresh-icon">refresh</span>
@@ -345,7 +345,7 @@
     <div id="sw-unavailable-banner" class="{% if nasa_api_available %}hidden{% endif %} p-space-sm rounded-xl bg-caution/15 border border-caution/30 flex items-center justify-between text-xs font-mono text-caution">
       <div class="flex items-center gap-2">
         <span class="material-symbols-outlined text-[16px]">satellite_alt</span>
-        <span>NASA DONKI API unavailable &mdash; displaying synchronized telemetry cache and mission baseline events.</span>
+        <span>NASA DONKI API unavailable &mdash; displaying cached events or clearly labelled sample data.</span>
       </div>
       <span class="px-2 py-0.5 rounded bg-caution/20 text-caution uppercase font-bold text-[10px]">Cached Telemetry</span>
     </div>
@@ -374,9 +374,13 @@
               <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase
                           {% if event.severity == 'high' %}bg-error/20 text-error
                           {% elif event.severity == 'moderate' %}bg-[#FFB020]/20 text-[#FFB020]
+                          {% elif event.severity == 'unclassified' %}bg-surface-container text-outline
                           {% else %}bg-[#22E3A0]/20 text-[#22E3A0]{% endif %}">
                 {{ event.get_severity_display }} Severity
               </span>
+              {% if event.is_sample %}
+              <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase bg-primary-container/10 text-primary-container">Sample Data</span>
+              {% endif %}
               <span class="font-mono text-[11px] text-outline">{{ event.start_time|date:"d M H:i" }} UTC</span>
               <span class="text-outline text-xs">·</span>
               <span class="font-mono text-[10px] text-outline">{{ event.external_id }}</span>
@@ -773,6 +777,7 @@
                 <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase ${sevClass}">
                   ${e.severity_display} Severity
                 </span>
+                ${e.is_sample ? '<span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase bg-primary-container/10 text-primary-container">Sample Data</span>' : ''}
                 <span class="font-mono text-[11px] text-outline">${e.time_display}</span>
                 <span class="text-outline text-xs">·</span>
                 <span class="font-mono text-[10px] text-outline">${e.external_id}</span>

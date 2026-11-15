@@ -29,7 +29,7 @@ class EnvironmentReading(models.Model):
         verbose_name_plural = "Environment Readings"
         ordering = ['-timestamp']
         indexes = [
-            models.Index(fields=['location', '-timestamp']),
+            models.Index(fields=['location', '-timestamp'], name='environment_locatio_85f392_idx'),
         ]
 
     def __str__(self):
@@ -86,6 +86,7 @@ class SpaceWeatherEvent(models.Model):
         ('low', 'Low'),
         ('moderate', 'Moderate'),
         ('high', 'High'),
+        ('unclassified', 'Unclassified'),
     ]
 
     event_type = models.CharField(max_length=30, choices=EVENT_TYPE_CHOICES, db_index=True)
@@ -102,6 +103,10 @@ class SpaceWeatherEvent(models.Model):
     )
     summary = models.TextField(blank=True, default='')
     severity = models.CharField(max_length=20, choices=SEVERITY_CHOICES, default='low', db_index=True)
+    is_sample = models.BooleanField(
+        default=False,
+        help_text="True for locally generated sample data; false for NASA DONKI records."
+    )
     fetched_at = models.DateTimeField(default=timezone.now)
 
     class Meta:
@@ -115,13 +120,18 @@ class SpaceWeatherEvent(models.Model):
     @property
     def plain_language_advice(self):
         """Plain-language guidance for crew safety based on event type and severity."""
+        if self.is_sample:
+            return "SAMPLE DATA — demonstration only; not an operational alert or crew recommendation."
+
+        if self.event_type in ('cme', 'solar_particle'):
+            return (
+                "Severity is unclassified by this prototype. Consult mission-specific "
+                "radiation guidance; no crew action is inferred from this event alone."
+            )
+
         if self.severity == 'high':
-            if self.event_type == 'solar_particle':
-                return "Critical solar proton flux: retreat to radiation storm shelter immediately; abort all EVAs."
             if self.event_type == 'flare':
                 return "Major X-class solar flare: stay inside shielded habitat quarters; expect high-frequency radio blackout."
-            if self.event_type == 'cme':
-                return "Fast CME shock front inbound: prepare habitat storm shelter; power down non-essential avionics."
             return "Severe space weather event: minimize extravehicular operations and monitor acute dosimetry."
         elif self.severity == 'moderate':
             if self.event_type == 'flare':

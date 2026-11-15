@@ -187,6 +187,13 @@ class SleepTests(RuleTestCase):
         self.check(GREEN, "sleep", daily([7.3, 7.1, 7.0, 6.6, 6.2, 5.8]),
                    self.BASE)
 
+    def test_S_status_uses_baseline_not_a_hardcoded_six_hour_band(self):
+        # 5.5 h for 3 nights is under a clock-time 6.0 h band, but only 0.7 h
+        # below a 6.2 h baseline, so the Science Lead rule stays green.
+        self.check(GREEN, "sleep", daily([5.5, 5.5, 5.5]), 6.2)
+        # The same 5.5 h nights are more than 1 h below an 8.0 h baseline.
+        self.check(AMBER, "sleep", daily([5.5, 5.5, 5.5]), 8.0)
+
 
 # --- 6. Mood / fatigue (1-5): baseline 4.0 ---------------------------------
 class MoodTests(RuleTestCase):

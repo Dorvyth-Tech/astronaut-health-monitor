@@ -41,6 +41,39 @@ class SeededPagesTests(TestCase):
         self.assertEqual(len(resp.context['metric_cards']), 7)
         self.assertIn('score', resp.context['health_score'])
 
+    def test_dashboard_labels_experimental_and_simulated_tiles(self):
+        resp = self.get_ok(reverse('core:dashboard'))
+        html = resp.content.decode('utf-8')
+        self.assertIn('Experimental', html)
+        self.assertIn('not a validated measure', html)
+        self.assertIn('Physio Reserve', html)
+        self.assertIn('Cumulative Stress', html)
+        self.assertIn('Hydration index: 96% (simulated)', html)
+        self.assertTrue(resp.context['health_score']['physio_reserve_experimental'])
+        self.assertTrue(resp.context['health_score']['cumulative_stress_experimental'])
+
+    def test_dashboard_sleep_caution_is_baseline_relative(self):
+        resp = self.get_ok(reverse('core:dashboard'))
+        html = resp.content.decode('utf-8')
+        self.assertNotIn('Caution range (<6.0 h)', html)
+        self.assertNotIn('Caution range (&lt;6.0 h)', html)
+        self.assertIn('more than 1 h below baseline', html)
+        # Seeded commander sleep baseline is 7.2 h, so the amber edge is 6.2 h.
+        self.assertEqual(resp.context['sleep_caution_low'], 6.2)
+        self.assertNotIn('apiData.caution_low || 6.0', html)
+
+    def test_dashboard_body_temp_unit_is_degree_c(self):
+        # Regression: the unit must be a real degree sign, not the mojibake 'Â°'
+        # that appears when UTF-8 '°C' is decoded as Windows-1252 / Latin-1.
+        resp = self.get_ok(reverse('core:dashboard'))
+        html = resp.content.decode('utf-8')
+        self.assertIn('°C', html)
+        self.assertNotIn('Â°', html)
+        check_in = self.get_ok(reverse('telemetry:check_in'))
+        check_html = check_in.content.decode('utf-8')
+        self.assertIn('°C', check_html)
+        self.assertNotIn('Â°', check_html)
+
     def test_history_renders_in_every_view_and_filter(self):
         base = reverse('telemetry:history')
         for query in ('', '?view=timeline', '?severity=caution', '?severity=critical',
@@ -68,6 +101,16 @@ class SeededPagesTests(TestCase):
     def test_other_pages_render(self):
         for name in ('core:profile', 'core:ground_support', 'telemetry:check_in'):
             self.get_ok(reverse(name))
+
+    def test_ground_support_sleep_threshold_is_baseline_relative(self):
+        resp = self.get_ok(reverse('core:ground_support'))
+        html = resp.content.decode('utf-8')
+        self.assertNotIn('ALERT THRESHOLD (6.0h)', html)
+        self.assertNotIn('Threshold: &lt;6.0h', html)
+        self.assertNotIn('Threshold: <6.0h', html)
+        self.assertIn('1 h below baseline', html)
+        self.assertIn('Experimental', html)
+        self.assertIn('not a validated measure', html)
 
     def test_api_readings_for_every_metric(self):
         for metric in METRICS:

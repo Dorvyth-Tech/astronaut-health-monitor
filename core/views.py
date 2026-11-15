@@ -2,6 +2,9 @@
 Core views for Space-Pulse: Dashboard, Login, Logout, Profile, Ground Support.
 """
 
+import json
+import logging
+
 from django.conf import settings
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse
@@ -13,13 +16,16 @@ from django.contrib import messages
 from django.db.models import Count
 from django.http import JsonResponse
 from django.utils import timezone
-from django.views.decorators.http import require_GET
+from django.views.decorators.http import require_GET, require_POST
 
 from core.models import AstronautProfile, Baseline, GroundMessage
 from telemetry.models import Reading, CheckIn
 from alerts.models import Alert
 from core.constants import METRIC_CONFIG, METRICS
-from core.companion import build_companion_answers
+from core import donki, intent
+from core.companion import build_companion_answers, indicator_answer
+from core.llm import rephrase_with_llm, classify_intent_with_llm
+from core.donki import get_space_weather
 from core.services import (
     baseline_details,
     get_baselines,
@@ -31,8 +37,10 @@ from core.services import (
     calculate_health_score,
     calculate_risk_vectors,
     sync_alerts_for_astronaut,
+    amber_edges,
 )
 
+logger = logging.getLogger(__name__)
 
 # The shared password of the seeded demo accounts. Outside DEMO_MODE it is just
 # the real password of those accounts; it is never a master key (see login_view).
@@ -146,11 +154,12 @@ def logout_view(request):
 
 
 def companion_answers_for(astronaut, metric_evals, health_score):
-    """The companion's answers for one astronaut (layer 1: fixed rules, no AI model).
+    """The companion's answers for one astronaut.
 
     This is the one place that gathers the numbers from the database and hands them
-    to core/companion.py. Layer 2 (an optional AI rephrase, see the docstring in
-    core/companion.py) would be called right here, on the returned list.
+    to core/companion.py (layer 1: fixed rules). If COMPANION_LLM_ENABLED is True,
+    layer 2 (core/llm.py) may then rephrase the wording. It never changes the facts
+    and falls back to the layer-1 answers on any problem.
     """
     rows = (
         Reading.objects.filter(astronaut=astronaut, metric__in=METRICS)
@@ -159,7 +168,10 @@ def companion_answers_for(astronaut, metric_evals, health_score):
     )
     source_counts = {row['source']: row['n'] for row in rows}
     open_alerts = Alert.objects.filter(astronaut=astronaut, acknowledged=False).count()
-    return build_companion_answers(metric_evals, health_score, source_counts, open_alerts)
+    answers = build_companion_answers(metric_evals, health_score, source_counts, open_alerts)
+    if settings.COMPANION_LLM_ENABLED:
+        answers = rephrase_with_llm(answers)
+    return answers
 
 
 @require_GET
@@ -176,6 +188,160 @@ def companion_answers_view(request):
     metric_evals = evaluate_astronaut_metrics(astronaut)
     health_score = calculate_health_score(metric_evals)
     return JsonResponse({'answers': companion_answers_for(astronaut, metric_evals, health_score)})
+
+
+def _ask_pulse_answer(intent_id, astronaut):
+    """The computed companion answer for one intent id, or None if there is none.
+
+    Always built by core/companion.py from the astronaut's own computed results.
+    When the AI is on, rephrase_with_llm only rewords it (same safety checks as the chips).
+    """
+    metric_evals = evaluate_astronaut_metrics(astronaut)
+    health_score = calculate_health_score(metric_evals)
+    answers = companion_answers_for(astronaut, metric_evals, health_score)
+
+    wanted = intent_id if intent_id in ('overall', 'what_to_do', 'data_source') else f'why_{intent_id}'
+    for answer in answers:
+        if answer['id'] == wanted:
+            return answer
+
+    # A nominal indicator has no chip, so build its answer from its own evaluation.
+    if intent_id in intent.INDICATOR_LABELS and intent_id in metric_evals:
+        simulated_note = answers[0].get('simulated_note', '') if answers else ''
+        answer = indicator_answer(intent_id, metric_evals[intent_id], simulated_note)
+        if settings.COMPANION_LLM_ENABLED:
+            answer = rephrase_with_llm([answer])[0]
+        return answer
+    return None
+
+
+def _ask_pulse_out_of_scope(method, note=''):
+    message = f"{note} {intent.OUT_OF_SCOPE_MESSAGE}".strip()
+    return JsonResponse({
+        'matched_id': None,
+        'method': method,
+        'answer': None,
+        'out_of_scope': True,
+        'message': message,
+        'supported_questions': list(intent.SUPPORTED_QUESTIONS),
+    })
+
+
+def _space_weather_view_data():
+    """(stored view, display strings) for the space-weather card, or (None, None). Never raises."""
+    view = get_space_weather(allow_refresh=settings.SPACE_WEATHER_AUTO_REFRESH)
+    if not view:
+        return None, None
+    try:
+        return view, donki.describe(view)
+    except Exception as exc:
+        logger.warning('Space weather card skipped: %s', type(exc).__name__)
+        return None, None
+
+
+def _space_weather_answer():
+    """The Ask Pulse answer for radiation / space weather, or None when there is no data.
+
+    Built only from the stored DONKI summary (core/donki.py); the AI may only reword it.
+    """
+    view = get_space_weather(allow_refresh=settings.SPACE_WEATHER_AUTO_REFRESH)
+    if not view:
+        return None
+    try:
+        answer = donki.build_answer(view)
+    except Exception as exc:
+        logger.warning('Space weather answer skipped: %s', type(exc).__name__)
+        return None
+    if settings.COMPANION_LLM_ENABLED:
+        answer = rephrase_with_llm([answer])[0]
+    return answer
+
+
+@require_GET
+def space_weather_view(request):
+    """JSON with the NASA DONKI space-weather summary (login required).
+
+    Context only: space weather near Earth, not a measurement of crew radiation dose.
+    """
+    view, display = _space_weather_view_data()
+    if view is None:
+        return JsonResponse({'available': False, 'label': donki.LABEL, 'message': 'Space weather unavailable'})
+    return JsonResponse({
+        'available': True,
+        'label': donki.LABEL,
+        'state': view['state'],
+        'source': view['source'],
+        'fetched_at': view['fetched_at'].isoformat(),
+        'summary': view['summary'],
+        'display': display,
+    })
+
+
+@require_POST
+def companion_ask_view(request):
+    """"Ask Pulse": a typed question -> one of the companion's computed answers.
+
+    NOT a chatbot. The text is only classified into a fixed intent (keywords first,
+    then, if the AI is on and nothing matched, the model picks from the same list and
+    its choice is validated). The reply is always the computed answer for that intent,
+    or a fixed out-of-scope message. Login and CSRF protected; only the logged-in
+    user's astronaut is ever used. The question text is never logged.
+
+    Accepts a form field or JSON: {"question": "..."}.
+    """
+    astronaut = get_active_astronaut(request)
+    if not astronaut:
+        return JsonResponse({'error': 'No astronaut profile for this login.'}, status=403)
+
+    if request.content_type == 'application/json':
+        try:
+            body = json.loads(request.body or b'{}')
+        except ValueError:
+            return JsonResponse({'error': 'Send JSON like {"question": "..."}.'}, status=400)
+        raw_question = body.get('question') if isinstance(body, dict) else None
+    else:
+        raw_question = request.POST.get('question')
+
+    question, error = intent.clean_question(raw_question)
+    if error:
+        return JsonResponse({'error': error}, status=400)
+
+    intent_id = intent.classify_by_keywords(question)
+    method = intent.KEYWORD
+    if intent_id is None and settings.COMPANION_LLM_ENABLED:
+        allowed_ids, descriptions = intent.INTENT_IDS, intent.INTENT_DESCRIPTIONS
+        # 'radiation' is offered to the model only while there is space-weather data to answer it.
+        if get_space_weather(allow_refresh=False):
+            allowed_ids = (*allowed_ids, 'radiation')
+            descriptions = {**descriptions, 'radiation': intent.RADIATION_INTENT_DESCRIPTION}
+        picked = classify_intent_with_llm(question, allowed_ids, descriptions)
+        if picked:
+            intent_id, method = picked[0], intent.AI
+
+    if intent_id == 'radiation':
+        answer = _space_weather_answer()
+        if answer is None:
+            logger.debug('ask_pulse intent=radiation method=%s no data', method)
+            return _ask_pulse_out_of_scope(intent.KEYWORD, intent.NO_RADIATION_DATA_NOTE)
+    else:
+        if intent_id is None:
+            logger.debug('ask_pulse intent=none')
+            return _ask_pulse_out_of_scope(intent.NONE)
+        answer = _ask_pulse_answer(intent_id, astronaut)
+        if answer is None:
+            return _ask_pulse_out_of_scope(intent.NONE)
+    logger.debug('ask_pulse intent=%s method=%s', intent_id, method)
+    public = {'ai_rephrased': False, 'ai_provider': '', **answer}
+    # The label text comes from the server, like the one on the chip answers.
+    public['ai_label'] = f"Rephrased by AI ({public['ai_provider']})" if public['ai_rephrased'] else ''
+    return JsonResponse({
+        'matched_id': answer['id'],
+        'method': method,
+        'answer': public,
+        'out_of_scope': False,
+        'message': '',
+        'supported_questions': [],
+    })
 
 
 def dashboard_view(request):
@@ -301,8 +467,10 @@ def dashboard_view(request):
         acknowledged=False
     ).order_by('-timestamp')[:5]
 
-    # Baseline for sleep in chart
-    sleep_baseline = baselines.get('sleep', 7.2)
+    # Sleep chart guide: amber starts more than 1 h below the personal baseline
+    # (Science Lead table). No hardcoded 6.0 h band, and no invented default.
+    sleep_baseline = baselines.get('sleep')
+    sleep_caution_low = amber_edges('sleep', sleep_baseline)['low']
 
     # Companion panel. Chips are plain links (?ask=<id>), so they work without JavaScript.
     companion_answers = companion_answers_for(astronaut, metric_evals, health_score)
@@ -319,10 +487,14 @@ def dashboard_view(request):
     except Exception:
         symptom_note = None
 
+    # Space weather (NASA DONKI): context only, never part of the status or the score above.
+    _, space_weather = _space_weather_view_data()
+
     return render(request, 'core/dashboard.html', {
         'symptom_note': symptom_note,
         'active_nav': 'dashboard',
         'current_astronaut': astronaut,
+        'space_weather': space_weather,
         'health_score': health_score,
         'headline_summary': headline_summary,
         'metric_cards': metric_cards,
@@ -330,6 +502,7 @@ def dashboard_view(request):
         'active_alerts': active_alerts,
         'companion_answers': companion_answers,
         'sleep_baseline': sleep_baseline,
+        'sleep_caution_low': sleep_caution_low,
         'next_ground_pass': 'T-01:14:22',
         'comm_latency': '18m 42s',
     })
@@ -510,7 +683,9 @@ def ground_support_view(request):
     stress_vals = get_recent_7('mood_stress', [3, 3, 4, 3, 4, 3, 3])
 
     sleep_latest = sleep_vals[-1] if sleep_vals else 5.8
-    sleep_base = baselines.get('sleep', 7.2)
+    sleep_base_raw = baselines.get('sleep')
+    sleep_caution_low = amber_edges('sleep', sleep_base_raw)['low']
+    sleep_base = sleep_base_raw if sleep_base_raw is not None else 7.2
     sleep_delta = round(sleep_latest - sleep_base, 1)
 
     hrv_latest = int(round(hrv_vals[-1])) if hrv_vals else 62
@@ -548,6 +723,7 @@ def ground_support_view(request):
         'flight_surgeon_console': "Ground Console JSC-MED-1",
         'sleep_latest': f"{sleep_latest:.1f}",
         'sleep_base': f"{sleep_base:.1f}",
+        'sleep_caution_low': sleep_caution_low,
         'sleep_delta': f"{sleep_delta:+.1f}",
         'hrv_latest': hrv_latest,
         'hrv_base': hrv_base,

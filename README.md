@@ -21,6 +21,7 @@ Space-Pulse is a deep-space astronaut health monitoring HUD and diagnostic web a
 - `core/`: Astronaut profiles, personal baselines, ground support messages, HUD context processors, and clinical business logic (`services.py`).
 - `telemetry/`: Biometric and habitat readings (`Reading`), daily self-reported logs (`CheckIn`), and JSON chart telemetry endpoints (`/api/readings/`).
 - `alerts/`: Diagnostic alert engine (`Alert`) with severity levels (Nominal, Caution, Critical), flight surgeon sync, and diagnostic pod details.
+- `environment/`: Habitat condition monitoring, simulated planetary environments, NASA DONKI event context, and environment alerts.
 - `design/`: Approved UI designs and layout references (`dashboard.html`, `login.html`, `daily_checkin.html`, `alert_details.html`).
 - `templates/`: Django template hierarchy (`base.html`, pages, navigation, modals).
 - `static/`: Static assets, stylesheets, scripts.
@@ -37,7 +38,7 @@ Space-Pulse is a deep-space astronaut health monitoring HUD and diagnostic web a
 
 2. **Deep-Space HUD Dashboard (`/`)**:
    - Matches approved `design/dashboard.html` HUD interface.
-   - Dynamic 0–100 Health Score composite radial ring with Physio Reserve and Cumulative Stress metrics.
+   - Dynamic 0–100 Health Score (from the 7 Science Lead indicators) plus labelled experimental Physio Reserve and Cumulative Stress tiles.
    - Dynamic natural-language trend detection headline (e.g. *"Mostly nominal. Sleep Duration has dropped four days in a row."*).
    - 7 Vital & Environmental Indicator cards with SVG sparklines calculated from the last 7 readings.
    - Interactive Chart.js Sleep Trend line chart with baseline dashed line, shaded caution band, and 7d/30d/mission cycle range toggles.
@@ -85,6 +86,12 @@ Space-Pulse is a deep-space astronaut health monitoring HUD and diagnostic web a
    - Chart.js 7-day mini trend waveform with baseline reference and caution threshold line.
    - Escalation protocol matrix and dismiss/acknowledge confirmation modal.
 
+9. **Environment Monitor (`/environment/`)**:
+   - Tracks habitat conditions and displays NASA DONKI event records for context.
+   - Radiation values are prototype model estimates, not direct dosimeter readings.
+   - CME and solar-particle events remain unclassified pending mission-approved criteria; fallback events are labeled sample data and do not generate alerts or radiation boosts.
+   - Refresh environment space-weather records with `python manage.py fetch_environment`.
+
 ---
 
 ## Local Setup & Quick Start
@@ -130,14 +137,24 @@ This populates:
 - Active and historical signals.
 - Every seeded reading is labelled `simulated`, and pages show a "SIMULATED DATA" banner while simulated readings are displayed. Reading sources are `manual` (check-in or typed entry), `csv`, `simulated` and `dataset`.
 - A login for each astronaut (e.g. `amara.reyes@mission.example` / `validAccess2026`). A login is linked to its astronaut by the same email.
+- Environmental fallback event examples are marked `SAMPLE DATA`; they are not NASA observations or operational alerts.
 
 ### 6. Configuration (optional)
-Copy `.env.example` to `.env` to change settings. Today there is one:
+Copy `.env.example` to `.env` to change settings. Settings:
 
 | Variable | Default | Meaning |
 |---|---|---|
 | `DEMO_MODE` | `False` | `True` turns on the crew switcher, the login preset buttons and the shared demo password. Leave it off for anything that is not a demo. |
+| `DEBUG` | `False` | Set `DEBUG=True` in your local `.env` for development. Leave it unset on a deploy. |
+| `SECRET_KEY` | built-in dev key | Set a long random value on a deploy. |
+| `ALLOWED_HOSTS` | `*` | Comma-separated host names. |
+| `CSRF_TRUSTED_ORIGINS` | `https://*.onrender.com` | Comma-separated origins allowed to POST over https. |
 
+### Deploying to Render
+- Build Command: `pip install -r requirements.txt && python manage.py collectstatic --noinput && python manage.py migrate && python manage.py seed_demo`
+- Start Command: `gunicorn spacepulse.wsgi:application`
+- Environment: `DEBUG=False`, `SECRET_KEY` (long random value), `DEMO_MODE=True` for a demo, and the AI keys if you use them.
+- SQLite is wiped on every deploy and `seed_demo` rebuilds the demo data each time, so this is for demos only.
 ### 7. Run Test Suite
 ```bash
 python manage.py test
@@ -151,6 +168,24 @@ python manage.py runserver
 Open [http://127.0.0.1:8000/](http://127.0.0.1:8000/) in your web browser.
 
 ---
+
+## Data sources & citations
+
+- **NASA DONKI** (Space Weather Database Of Notifications, Knowledge, Information): live space-weather events are requested from [api.nasa.gov](https://api.nasa.gov). The DONKI catalogue is also published by CCMC at [kauai.ccmc.gsfc.nasa.gov/DONKI](https://kauai.ccmc.gsfc.nasa.gov/DONKI/) and [ccmc.gsfc.nasa.gov/tools/DONKI](https://ccmc.gsfc.nasa.gov/tools/DONKI/).
+- **NASA Open Science Data Repository (OSDR)** ([osdr.nasa.gov](https://osdr.nasa.gov)): cited as a research reference only. The demo does not load crew telemetry from OSDR.
+- **NOAA Space Weather Scales** ([swpc.noaa.gov/noaa-scales-explanation](https://www.swpc.noaa.gov/noaa-scales-explanation)): used to map DONKI geomagnetic-storm Kp values to the NOAA G-scale (G1–G5).
+
+Crew biometric and habitat data in the demo is **simulated** and labelled as such (reading source `simulated`, plus a "SIMULATED DATA" banner while simulated readings are shown). Space weather is **context only** and is not part of the health score. The exercise plan of 150 minutes per week is a **team assumption**, not a Science Lead rule. The app makes **no medical diagnosis** and is not a medical device.
+
+## Use of AI
+
+The Pulse Companion's answers are **rule-based** (`core/companion.py`). An optional LLM layer (default provider Groq, model `openai/gpt-oss-20b`, with Gemini `gemini-3.5-flash-lite` as fallback) may only **rephrase** those rule-based answers and **classify** a typed question's intent by choosing from a fixed list. The model never writes the underlying answers. A safety validator rejects any rewrite that adds numbers or diagnosis-style words that were not in the original text. The LLM is off unless `COMPANION_LLM_ENABLED=True`.
+
+Development was AI-assisted: Grok Bot (an AI coding assistant) helped write backend code, tests and documentation. Every change was reviewed, tested and committed by a human team member. No AI-generated images or video are used. The app is hosted on Render, which is not an AI tool.
+
+## License
+
+This project is released under the MIT License. See `LICENSE`.
 
 ## Disclaimer
 *Prototype for demonstration purposes. Not a medical device.*

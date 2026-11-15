@@ -49,3 +49,6 @@ Desktop.ini
 .gemini/
 .system_generated/
 *.sqlite3.bak
+
+# Output of collectstatic (built on deploy)
+staticfiles/

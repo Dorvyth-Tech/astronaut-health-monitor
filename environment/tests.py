@@ -4,7 +4,7 @@ Designed for clarity and educational value for the NASA Space Apps Challenge 202
 """
 
 from unittest.mock import patch, MagicMock
-from django.test import TestCase, Client
+from django.test import SimpleTestCase, TestCase, Client
 from django.urls import reverse
 from django.utils import timezone
 from django.core.management import call_command
@@ -12,16 +12,34 @@ from django.contrib.auth.models import User
 
 from core.models import AstronautProfile
 from telemetry.models import CheckIn
-from environment.models import EnvironmentReading, EnvironmentAlert
+from environment.models import EnvironmentReading, EnvironmentAlert, SpaceWeatherEvent
 from environment.services import (
     check_thresholds,
     simulate_environment,
     fetch_earth_weather,
+    map_severity,
+    calculate_radiation_level,
+    _process_donki_records,
+    _seed_realistic_donki_sample_events,
+    _sync_space_weather_alerts,
     get_metric_status,
     detect_symptom_environment_correlation,
     SIMULATION_PROFILES,
     SAFE_RANGES,
 )
+
+
+class SpaceWeatherClassificationTests(SimpleTestCase):
+    def test_cme_speed_and_solar_particle_events_remain_unclassified(self):
+        cme = {'cmeAnalyses': [{'speed': 2000.0}]}
+
+        self.assertEqual(map_severity('cme', cme), 'unclassified')
+        self.assertEqual(map_severity('solar_particle', {'eventTime': '2026-11-15'}), 'unclassified')
+
+    def test_unclassified_event_advice_does_not_claim_acute_hazard(self):
+        event = SpaceWeatherEvent(event_type='cme', severity='unclassified')
+
+        self.assertIn('no crew action is inferred', event.plain_language_advice)
 
 
 class EnvironmentThresholdTests(TestCase):
@@ -150,6 +168,24 @@ class EnvironmentAPITests(TestCase):
         self.assertIn('history_24h', data)
         self.assertIn('safe_ranges', data)
 
+    @patch('environment.views.fetch_space_weather')
+    def test_space_weather_api_labels_sample_events(self, mock_fetch):
+        event = SpaceWeatherEvent.objects.create(
+            event_type='cme',
+            external_id='sample-api-event',
+            start_time=timezone.now(),
+            intensity='820 km/s',
+            summary='SAMPLE DATA — test event',
+            severity='unclassified',
+            is_sample=True,
+        )
+        mock_fetch.return_value = ([event], False)
+
+        response = self.client.get(reverse('environment:space_weather_api'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()['events'][0]['is_sample'])
+
     @patch('requests.get')
     def test_earth_weather_mocked_success(self, mock_get):
         """Mocked OpenWeather 200 OK response updates Earth reading and sets data_source=live."""
@@ -238,3 +274,49 @@ class SeedEnvironmentCommandTests(TestCase):
         # Verify each location was seeded
         for loc in ['earth', 'orbit', 'moon', 'mars']:
             self.assertTrue(EnvironmentReading.objects.filter(location=loc).exists())
+
+
+class SpaceWeatherSampleDataTests(TestCase):
+    def test_api_records_override_sample_status_and_leave_cme_unclassified(self):
+        sample = SpaceWeatherEvent.objects.create(
+            event_type='cme',
+            external_id='test-cme-record',
+            start_time=timezone.now(),
+            intensity='sample',
+            severity='unclassified',
+            is_sample=True,
+        )
+
+        _process_donki_records('cme', [{
+            'activityID': sample.external_id,
+            'beginTime': '2026-11-15T00:00Z',
+            'cmeAnalyses': [{'speed': 2000.0}],
+            'note': 'NASA DONKI record',
+        }])
+
+        sample.refresh_from_db()
+        self.assertFalse(sample.is_sample)
+        self.assertEqual(sample.severity, 'unclassified')
+
+    def test_sample_events_are_labelled_and_do_not_create_alerts_or_radiation_boosts(self):
+        _seed_realistic_donki_sample_events()
+        events = list(SpaceWeatherEvent.objects.all())
+        reading = EnvironmentReading.objects.create(
+            location='mars',
+            temperature=20.0,
+            pressure=56.5,
+            humidity=35.0,
+            oxygen_percent=28.0,
+            co2_ppm=3200.0,
+            radiation_level=24.0,
+            is_simulated=True,
+        )
+
+        _sync_space_weather_alerts(events)
+        with patch('environment.services.random.uniform', return_value=0):
+            radiation, source, cause = calculate_radiation_level('mars')
+
+        self.assertTrue(all(event.is_sample for event in events))
+        self.assertTrue(all(event.severity == 'unclassified' for event in events))
+        self.assertEqual(EnvironmentAlert.objects.count(), 0)
+        self.assertEqual((radiation, source, cause), (24.0, 'simulated', None))

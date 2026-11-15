@@ -126,9 +126,11 @@ class Command(BaseCommand):
         # Seed NASA DONKI space weather events
         self.stdout.write("Fetching & synchronizing NASA DONKI space weather events...")
         sw_events, _ = fetch_space_weather(days=7)
+        sample_count = sum(event.is_sample for event in sw_events)
 
         self.stdout.write(
             self.style.SUCCESS(
-                f"Successfully seeded {total_created} environmental readings, {alert_count} active safety alerts, and {len(sw_events)} space weather events across 4 locations!"
+                f"Successfully seeded {total_created} environmental readings, {alert_count} active safety alerts, and "
+                f"{len(sw_events)} space weather events ({sample_count} SAMPLE DATA) across 4 locations!"
             )
         )
