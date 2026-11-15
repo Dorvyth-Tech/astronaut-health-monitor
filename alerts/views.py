@@ -2,16 +2,84 @@
 Alerts views and acknowledge actions for Space-Pulse.
 """
 
+import json
+
 from django.shortcuts import render, redirect, get_object_or_404
 from django.views.decorators.http import require_POST
 from django.http import JsonResponse
 from core.views import get_active_astronaut
 from alerts.models import Alert
-from core.models import Baseline
 from telemetry.models import Reading
 from core.constants import METRIC_CONFIG
-from core.services import sync_alerts_for_astronaut, amber_edges, get_baselines
+from core.services import (
+    sync_alerts_for_astronaut,
+    amber_edges,
+    get_baselines,
+    evaluate_astronaut_metrics,
+)
 from core.alert_texts import parts_for
+
+
+NO_DATA_LABEL = 'No data'
+
+
+def _related_card(evals, metric_key):
+    """Latest related-indicator value and status_label, or No data."""
+    ev = evals.get(metric_key) or {}
+    config = METRIC_CONFIG.get(metric_key, {})
+    unit = ev.get('unit') or config.get('unit', '')
+    label = ev.get('display_label') or config.get('label', metric_key)
+    value = ev.get('value')
+    if value is None:
+        return {
+            'label': label,
+            'value_str': NO_DATA_LABEL,
+            'status_label': NO_DATA_LABEL,
+            'has_data': False,
+        }
+    value_str = f"{value:g} {unit}".strip()
+    return {
+        'label': label,
+        'value_str': value_str,
+        'status_label': ev.get('label') or NO_DATA_LABEL,
+        'has_data': True,
+    }
+
+
+def _four_day_delta(values, unit):
+    """Change from the earliest of the last 4 readings to the latest."""
+    recent = values[-4:] if values else []
+    if len(recent) < 2:
+        return NO_DATA_LABEL
+    start, end = recent[0], recent[-1]
+    if start != 0:
+        return f"{((end - start) / start) * 100:+.1f}%"
+    return f"{end - start:+.1f} {unit}".strip()
+
+
+def _caution_range_label(edges, unit):
+    low, high = edges.get('low'), edges.get('high')
+    if low is not None and high is not None:
+        return f"Caution range: {low:g} \u2013 {high:g} {unit}".strip()
+    if low is not None:
+        return f"Caution below {low:g} {unit}".strip()
+    if high is not None:
+        return f"Caution above {high:g} {unit}".strip()
+    return NO_DATA_LABEL
+
+
+def _chart_y_bounds(values, baseline, edges):
+    nums = list(values)
+    if baseline is not None:
+        nums.append(baseline)
+    for edge in (edges.get('low'), edges.get('high')):
+        if edge is not None:
+            nums.append(edge)
+    if not nums:
+        return 0.0, 1.0
+    lo, hi = min(nums), max(nums)
+    pad = (hi - lo) * 0.15 if hi != lo else (abs(hi) * 0.1 or 1.0)
+    return lo - pad, hi + pad
 
 
 def alerts_list(request):
@@ -125,23 +193,50 @@ def alert_detail(request, alert_id):
     chart_labels = [f"D-{r.mission_day}" if r.mission_day != astronaut.current_mission_day else f"D-{r.mission_day} (Today)" for r in readings]
     chart_values = [r.value for r in readings]
 
-    # Baseline & thresholds
-    baseline_val = get_baselines(astronaut).get(alert.metric, METRIC_CONFIG.get(alert.metric, {}).get('default_baseline', 7.2))
-
     config = METRIC_CONFIG.get(alert.metric, {})
+    unit = config.get('unit', '')
+    metric_label = config.get('label', alert.metric)
+
+    real_baseline = get_baselines(astronaut).get(alert.metric)
+    has_baseline = real_baseline is not None
     # Guide line for the chart: where the amber band starts (core/rules.py).
     # Always a number, because the template prints it straight into JavaScript.
-    edges = amber_edges(alert.metric, baseline_val)
-    caution_low = next((v for v in (edges['low'], edges['high']) if v is not None), baseline_val)
-    unit = config.get('unit', 'h')
+    edges = amber_edges(alert.metric, real_baseline)
+    caution_low = next(
+        (v for v in (edges['low'], edges['high'], real_baseline) if v is not None),
+        0.0,
+    )
 
-    latest_val = chart_values[-1] if chart_values else baseline_val
-    variance = round(latest_val - baseline_val, 1)
-    variance_str = f"{variance:+.1f} {unit}"
+    if chart_values:
+        latest_val = chart_values[-1]
+        latest_str = f"{latest_val:g} {unit}".strip()
+        mean_val = round(sum(chart_values) / len(chart_values), 1)
+        mean_str = f"{mean_val} {unit}".strip()
+    else:
+        latest_val = None
+        latest_str = NO_DATA_LABEL
+        mean_val = None
+        mean_str = NO_DATA_LABEL
 
-    # Calculate 7-day mean
-    mean_val = round(sum(chart_values) / len(chart_values), 1) if chart_values else latest_val
-    deficit = round(sum(v - baseline_val for v in chart_values), 1) if chart_values else 0.0
+    if has_baseline and latest_val is not None:
+        variance = round(latest_val - real_baseline, 1)
+        variance_str = f"{variance:+.1f} {unit}".strip()
+    else:
+        variance_str = NO_DATA_LABEL
+
+    if has_baseline and chart_values:
+        deficit = round(sum(v - real_baseline for v in chart_values), 1)
+        deficit_str = f"{deficit:+.1f} {unit} total".strip()
+    else:
+        deficit_str = NO_DATA_LABEL
+
+    evals = evaluate_astronaut_metrics(astronaut)
+    chart_y_min, chart_y_max = _chart_y_bounds(chart_values, real_baseline, edges)
+
+    def js_num(value, digits=2):
+        if value is None:
+            return 'null'
+        return f"{value:.{digits}f}"
 
     return render(request, 'alerts/detail.html', {
         'active_nav': 'alerts',
@@ -150,15 +245,29 @@ def alert_detail(request, alert_id):
         'alert_copy': parts_for(alert.metric, alert.severity),
         'chart_labels': chart_labels,
         'chart_values': chart_values,
-        'baseline_val': baseline_val,
+        'baseline_val': real_baseline,
+        'has_baseline': has_baseline,
+        'baseline_js': js_num(real_baseline, 1),
         'caution_low': caution_low,
+        'caution_band_low_js': js_num(edges['low']),
+        'caution_band_high_js': js_num(edges['high']),
+        'caution_range_str': _caution_range_label(edges, unit),
         'latest_val': latest_val,
+        'latest_str': latest_str,
         'variance_str': variance_str,
         'mean_val': mean_val,
-        'deficit_str': f"{deficit:+.1f} {unit} total",
+        'mean_str': mean_str,
+        'deficit_str': deficit_str,
+        'four_day_delta_str': _four_day_delta(chart_values, unit),
         'unit': unit,
+        'unit_json': json.dumps(unit),
+        'metric_label': metric_label,
+        'metric_label_json': json.dumps(metric_label),
+        'related_hrv': _related_card(evals, 'hrv'),
+        'related_stress': _related_card(evals, 'mood_stress'),
+        'chart_y_min': chart_y_min,
+        'chart_y_max': chart_y_max,
     })
-
 
 @require_POST
 def acknowledge_alert(request, alert_id):

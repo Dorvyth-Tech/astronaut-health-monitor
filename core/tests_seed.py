@@ -140,8 +140,18 @@ class SeedDemoOptionsTests(TestCase):
             call_command('seed_demo', scenario='not_a_scenario', verbosity=0)
         self.assertTrue(AstronautProfile.objects.filter(email="existing@mission.example").exists())
 
-    def test_plain_seed_demo_keeps_the_old_behaviour(self):
+    def test_plain_seed_demo_uses_science_lead_alert_texts(self):
         call_command('seed_demo', verbosity=0)
-        titles = set(Alert.objects.values_list('title', flat=True))
-        self.assertIn('Sleep is trending down', titles)
         self.assertEqual(Alert.objects.count(), 3)
+        sleep = Alert.objects.get(metric='sleep')
+        self.assertEqual(sleep.severity, 'caution')
+        self.assertEqual(sleep.title, title_for('sleep', 'caution'))
+        self.assertEqual(sleep.message, message_for('sleep', 'caution'))
+        hr = Alert.objects.get(metric='resting_hr')
+        self.assertEqual(hr.severity, 'caution')
+        self.assertEqual(hr.title, title_for('resting_hr', 'caution'))
+        self.assertEqual(hr.message, message_for('resting_hr', 'caution'))
+        # Nominal cabin CO2 has no Science Lead amber/red text; it stays a status signal.
+        co2 = Alert.objects.get(metric='cabin_co2')
+        self.assertEqual(co2.severity, 'nominal')
+        self.assertFalse(Alert.objects.filter(title='Sleep is trending down').exists())

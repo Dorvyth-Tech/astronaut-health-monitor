@@ -399,21 +399,23 @@ class Command(BaseCommand):
             # Alerts come from the rules (apply_sleep_decline), not from hand-written rows.
             pass
         else:
-            # Active Alerts
+            # Active and historical alerts, using Science Lead wording where it exists.
+            # The nominal cabin CO2 row has no Science Lead text (the wording set
+            # covers amber/red only), so it stays a factual status signal.
             self.stdout.write("Configuring active and historical signals...")
-            # 1. Caution Alert: Sleep trending down
+            from core.alert_texts import message_for, title_for
+
             Alert.objects.create(
                 astronaut=cmdr,
                 metric="sleep",
                 severity="caution",
-                title="Sleep is trending down",
-                message="5.8 h today, down from 7.3 h four days ago. Your baseline is 7.2 h.",
+                title=title_for('sleep', 'caution'),
+                message=message_for('sleep', 'caution'),
                 mission_day=142,
                 timestamp=timezone.now() - timedelta(minutes=45),
                 acknowledged=False
             )
 
-            # 2. Nominal Alert / Signal: Cabin CO2 steady
             Alert.objects.create(
                 astronaut=cmdr,
                 metric="cabin_co2",
@@ -425,13 +427,12 @@ class Command(BaseCommand):
                 acknowledged=False
             )
 
-            # 3. Past acknowledged alert for historical audit testing
             Alert.objects.create(
                 astronaut=cmdr,
                 metric="resting_hr",
                 severity="caution",
-                title="Resting HR elevation during high-workload EVA",
-                message="Resting heart rate reached 76 bpm following 4-hour airlock depressurization drill.",
+                title=title_for('resting_hr', 'caution'),
+                message=message_for('resting_hr', 'caution'),
                 mission_day=130,
                 timestamp=timezone.now() - timedelta(days=12),
                 acknowledged=True

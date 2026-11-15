@@ -210,10 +210,17 @@ class MoodTests(RuleTestCase):
     def test_M_4_drop_of_1_for_7_days_is_red(self):
         self.check(RED, "mood", daily([3] * 7), 4.0)
 
-    def test_M_5_drop_of_0_6_falls_in_the_gap_and_is_amber(self):
-        # assumes Q6 (proposal: amber starts at a drop of MORE than 0.5,
-        # which closes the 0.5-1.0 gap). The doc leaves the expected value open.
-        self.check(AMBER, "mood", daily([3, 3, 3]), 3.6)
+    def test_M_5_drop_of_0_9_for_3_days_stays_green(self):
+        # Science Lead amber is a drop of 1 point or more; 0.9 is in the table gap.
+        self.check(GREEN, "mood", daily([3.1, 3.1, 3.1]), 4.0)
+
+    def test_M_6_drop_of_1_0_for_3_days_is_amber(self):
+        self.check(AMBER, "mood", daily([3.0, 3.0, 3.0]), 4.0)
+
+    def test_M_7_drop_of_0_6_in_the_table_gap_is_green(self):
+        # Was Q6 (amber at a drop of more than 0.5). The Science Lead table
+        # keeps that gap green until the drop reaches 1 point.
+        self.check(GREEN, "mood", daily([3, 3, 3]), 3.6)
 
 
 # --- 7. Cabin CO2: hourly, absolute (no baseline) --------------------------

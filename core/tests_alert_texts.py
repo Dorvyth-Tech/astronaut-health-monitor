@@ -113,20 +113,20 @@ EXPECTED_TEXTS = {
 }
 
 EXPECTED_TITLES = {
-    ("resting_hr", "amber"): "Resting heart rate \u00b7 Amber",
-    ("resting_hr", "red"): "Resting heart rate \u00b7 Red",
-    ("hrv", "amber"): "Heart rate variability \u00b7 Amber",
-    ("hrv", "red"): "Heart rate variability \u00b7 Red",
-    ("exercise", "amber"): "Resistance exercise \u00b7 Amber",
-    ("exercise", "red"): "Resistance exercise \u00b7 Red",
-    ("body_temp", "amber"): "Body temperature \u00b7 Amber",
-    ("body_temp", "red"): "Body temperature \u00b7 Red",
-    ("sleep", "amber"): "Sleep \u00b7 Amber",
-    ("sleep", "red"): "Sleep \u00b7 Red",
-    ("mood", "amber"): "Mood and fatigue \u00b7 Amber",
-    ("mood", "red"): "Mood and fatigue \u00b7 Red",
-    ("cabin_co2", "amber"): "Cabin CO\u2082 \u00b7 Amber",
-    ("cabin_co2", "red"): "Cabin CO\u2082 \u00b7 Red",
+    ("resting_hr", "amber"): "Resting heart rate \u00b7 Caution",
+    ("resting_hr", "red"): "Resting heart rate \u00b7 Critical",
+    ("hrv", "amber"): "Heart rate variability \u00b7 Caution",
+    ("hrv", "red"): "Heart rate variability \u00b7 Critical",
+    ("exercise", "amber"): "Resistance exercise \u00b7 Caution",
+    ("exercise", "red"): "Resistance exercise \u00b7 Critical",
+    ("body_temp", "amber"): "Body temperature \u00b7 Caution",
+    ("body_temp", "red"): "Body temperature \u00b7 Critical",
+    ("sleep", "amber"): "Sleep \u00b7 Caution",
+    ("sleep", "red"): "Sleep \u00b7 Critical",
+    ("mood", "amber"): "Mood and fatigue \u00b7 Caution",
+    ("mood", "red"): "Mood and fatigue \u00b7 Critical",
+    ("cabin_co2", "amber"): "Cabin CO\u2082 \u00b7 Caution",
+    ("cabin_co2", "red"): "Cabin CO\u2082 \u00b7 Critical",
 }
 
 
@@ -209,8 +209,44 @@ class RaisingAnAlertUsesScienceLeadWordingTests(TestCase):
         self.assertContains(resp, parts["escalate"])
         self.assertNotContains(resp, "Dim cabin lights")
         self.assertNotContains(resp, "Today is in your")
+        self.assertNotContains(resp, "Amber Range")
         self.assertNotContains(resp, "Amber range, 5.0")
+        self.assertNotContains(resp, "REM Cycle")
+        self.assertNotContains(resp, "61 min")
+        self.assertNotContains(resp, "-20.5%")
+        self.assertNotContains(resp, "62 ms")
+        self.assertNotContains(resp, "Neuro-Stress")
+        self.assertContains(resp, "Sleep (7 Days)")
+        self.assertContains(resp, "Caution below 6.2")
+        self.assertContains(resp, "-3.3%")
+        # No HRV or stress readings in this setup: those slots stay empty-safe.
+        self.assertContains(resp, "No data")
 
+
+
+    def test_alert_detail_uses_related_indicator_readings(self):
+        from django.contrib.auth.models import User
+
+        User.objects.create_user(
+            username="amara.reyes",
+            email="amara.reyes@mission.example",
+            password="validAccess2026",
+        )
+        for i, value in enumerate([6.0, 5.9, 5.8]):
+            Reading.objects.create(
+                astronaut=self.astro, metric="sleep", value=value, mission_day=140 + i
+            )
+        Reading.objects.create(astronaut=self.astro, metric="hrv", value=55.0, mission_day=142)
+        Reading.objects.create(astronaut=self.astro, metric="mood_stress", value=7.0, mission_day=142)
+        sync_alerts_for_astronaut(self.astro)
+        alert = Alert.objects.get(astronaut=self.astro, metric="sleep")
+        self.client.login(username="amara.reyes", password="validAccess2026")
+        resp = self.client.get(reverse("alerts:detail", args=[alert.id]))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "55 ms")
+        self.assertContains(resp, "7 /10")
+        self.assertNotContains(resp, "62 ms")
+        self.assertNotContains(resp, "Neuro-Stress")
 
 class SeedDemoUsesScienceLeadWordingTests(TestCase):
     def test_sleep_decline_scenario_stores_the_science_lead_texts(self):
