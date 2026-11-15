@@ -420,34 +420,8 @@
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-space-md">
-        <!-- Alert 1: Sleep Trending Down (Amber Alert) -->
-        <div class="rounded-xl bg-surface-container-low/90 backdrop-blur-md p-space-md shadow-lg flex flex-col justify-between gap-space-sm relative overflow-hidden border border-white/5">
-          <div class="absolute left-0 top-0 bottom-0 w-1 bg-error"></div>
-          <div class="flex items-start justify-between gap-space-sm">
-            <div class="flex items-center gap-space-xs">
-              <span class="px-2 py-0.5 rounded-full bg-surface-container-highest text-error font-label-caps text-label-caps uppercase flex items-center gap-1">
-                <span class="w-1.5 h-1.5 rounded-full bg-error animate-ping"></span>
-                Caution Notice
-              </span>
-              <span class="font-body-sm text-body-sm text-outline">Autonomous ID #AL-892</span>
-            </div>
-            <span class="font-label-caps text-label-caps text-on-surface-variant">Day 142 · 07:45 UTC</span>
-          </div>
-          <div>
-            <h4 class="font-headline-sm text-headline-sm text-primary">Sleep is trending down</h4>
-            <p class="font-body-md text-body-md text-on-surface-variant mt-1 leading-relaxed">
-              {{ sleep_latest }} h today.{% if sleep_base %} Baseline {{ sleep_base }} h.{% endif %}
-              <span class="text-on-surface block mt-1"><strong class="text-primary-fixed">Autonomous Countermeasure:</strong> Cabin circadian lighting shifted to dusk spectrum; Melatonin 0.5mg protocol advised prior to Sol 143 rest cycle.</span>
-            </p>
-          </div>
-          <div class="pt-space-xs flex items-center justify-between font-label-sm text-label-sm text-outline">
-            <span>Flight Surgeon Verification: Pending</span>
-            <span class="text-primary">View-only stream</span>
-          </div>
-        </div>
-
         <!-- Alert 2: Cabin CO2 Steady (Nominal Info) -->
-        <div class="rounded-xl bg-surface-container-low/90 backdrop-blur-md p-space-md shadow-lg flex flex-col justify-between gap-space-sm relative overflow-hidden border border-white/5">
+        <div class="md:col-span-2 rounded-xl bg-surface-container-low/90 backdrop-blur-md p-space-md shadow-lg flex flex-col justify-between gap-space-sm relative overflow-hidden border border-white/5">
           <div class="absolute left-0 top-0 bottom-0 w-1 bg-primary-fixed-dim"></div>
           <div class="flex items-start justify-between gap-space-sm">
             <div class="flex items-center gap-space-xs">

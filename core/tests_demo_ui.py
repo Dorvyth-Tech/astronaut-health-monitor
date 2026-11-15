@@ -249,12 +249,29 @@ class GroundSupportSummaryTests(TestCase):
             for text in self.REMOVED:
                 self.assertNotIn(text, html, text)
 
-    def test_sleep_baseline_line_only_when_provided(self):
-        self.assertIn('Baseline 7.2 h.', self._render(sleep_latest='5.8', sleep_base='7.2'))
-        self.assertNotIn('Baseline  h', self._render(sleep_latest='5.8'))
-
     def test_physio_reserve_keeps_experimental_tag(self):
         html = self._render(physio_reserve='86.8')
         self.assertIn('86.8%', html)
         self.assertIn('Experimental · not a validated measure', html)
         self.assertIn('No data', self._render())
+
+
+class GroundSupportNoStaticCautionCardTests(TestCase):
+    """The hard-coded 'Caution Notice' sleep card (with a melatonin line) must stay gone."""
+
+    @classmethod
+    def setUpTestData(cls):
+        call_command('seed_demo', verbosity=0)
+
+    def test_static_caution_card_absent_from_ground_support_page(self):
+        resp = self.client.post(reverse('core:login'), {
+            'email': 'amara.reyes@mission.example',
+            'password': 'validAccess2026',
+        })
+        self.assertEqual(resp.status_code, 302)
+        html = self.client.get(reverse('core:ground_support')).content.decode()
+        for text in ('Melatonin', '#AL-892', 'Caution Notice', 'Sleep is trending down',
+                     'Flight Surgeon Verification: Pending'):
+            self.assertNotIn(text, html, text)
+        self.assertIn('Recent Signals', html)
+        self.assertIn('Cabin CO2 steady', html)  # the CO2 card is left as it was
