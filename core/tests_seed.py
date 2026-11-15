@@ -16,6 +16,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from alerts.models import Alert
+from core.alert_texts import message_for, title_for
 from core import rules
 from core.constants import METRICS
 from core.models import AstronautProfile, Baseline
@@ -87,7 +88,8 @@ class SleepDeclineScenarioTests(TestCase):
         active = list(Alert.objects.filter(acknowledged=False).values_list('astronaut__email', 'metric', 'severity'))
         self.assertEqual(active, [('amara.reyes@mission.example', 'sleep', 'caution')])
         alert = Alert.objects.get(acknowledged=False)
-        self.assertIn('below baseline for 3 nights', alert.message)
+        self.assertEqual(alert.title, title_for('sleep', 'amber'))
+        self.assertEqual(alert.message, message_for('sleep', 'amber'))
         self.assertEqual(alert.mission_day, 142)
         self.assertFalse(Alert.objects.filter(title='Sleep is trending down').exists())
 
@@ -95,7 +97,8 @@ class SleepDeclineScenarioTests(TestCase):
         old = list(Alert.objects.filter(acknowledged=True))
         self.assertEqual(len(old), 1)
         self.assertEqual((old[0].metric, old[0].severity, old[0].mission_day), ('resting_hr', 'caution', 130))
-        self.assertIn('above baseline for 3 days', old[0].message)
+        self.assertEqual(old[0].title, title_for('resting_hr', 'amber'))
+        self.assertEqual(old[0].message, message_for('resting_hr', 'amber'))
 
     def test_health_score_is_a_number(self):
         score = calculate_health_score(self.evals)

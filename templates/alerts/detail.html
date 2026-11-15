@@ -87,7 +87,7 @@
           </div>
 
           <p class="font-body-lg text-body-lg text-on-surface-variant leading-relaxed">
-            {{ alert.message }} Today is in your <span class="text-[#FFB020] font-headline-sm">Amber range, 5.0–6.4 h</span>.
+            {% if alert_copy %}{{ alert_copy.what }}{% else %}{{ alert.message }}{% endif %}
           </p>
 
           <div class="mt-space-md grid grid-cols-3 gap-space-sm">
@@ -116,7 +116,7 @@
             <span class="font-label-caps text-label-caps text-primary-fixed uppercase">Cognitive Risk Index: Low</span>
           </div>
           <p class="font-body-lg text-body-lg text-on-surface-variant leading-relaxed">
-            Short sleep can reduce alertness and reaction time, and the effect builds over a long mission. Your <span class="text-on-surface font-headline-sm">HRV (62 ms)</span> and <span class="text-on-surface font-headline-sm">stress (3/10)</span> are still normal.
+            {% if alert_copy %}{{ alert_copy.why }}{% else %}{{ alert.message }}{% endif %}
           </p>
           <div class="mt-space-md p-space-sm rounded-lg bg-surface-container-low flex flex-col sm:flex-row gap-space-md sm:items-center justify-between border border-white/5">
             <div class="flex items-center gap-space-sm">
@@ -149,41 +149,18 @@
                 <legend class="font-headline-sm text-headline-sm text-on-surface tracking-wide uppercase">What to do</legend>
               </div>
               <span class="px-space-sm py-0.5 rounded-full bg-surface-container-high text-primary font-headline-sm text-body-sm" id="action-counter">
-                1 of 3 done
+                0 of 1 done
               </span>
             </div>
 
             <div class="flex flex-col gap-space-xs" id="checklist-group">
-              <!-- Item 1 -->
               <label class="group flex items-center gap-space-md min-h-[44px] p-space-sm rounded-lg bg-surface-container-low hover:bg-surface-container-high cursor-pointer transition-colors border border-white/5">
-                <input checked class="peer hidden" id="check-1" onchange="updateChecklistState()" type="checkbox"/>
-                <div class="w-6 h-6 rounded-lg bg-primary-container flex items-center justify-center text-on-primary-container shrink-0 peer-checked:bg-primary-container peer-[:not(:checked)]:bg-surface-container-high">
-                  <span class="material-symbols-outlined text-[18px] peer-checked:inline peer-[:not(:checked)]:hidden">check</span>
-                </div>
-                <span class="font-body-md text-body-md text-on-surface-variant group-hover:text-on-surface select-none peer-checked:line-through peer-checked:opacity-50">
-                  Dim cabin lights 60 minutes before your sleep period.
-                </span>
-              </label>
-
-              <!-- Item 2 -->
-              <label class="group flex items-center gap-space-md min-h-[44px] p-space-sm rounded-lg bg-surface-container-low hover:bg-surface-container-high cursor-pointer transition-colors border border-white/5">
-                <input class="peer hidden" id="check-2" onchange="updateChecklistState()" type="checkbox"/>
+                <input class="peer hidden" id="check-1" onchange="updateChecklistState()" type="checkbox"/>
                 <div class="w-6 h-6 rounded-lg bg-surface-container-high flex items-center justify-center text-on-primary-container shrink-0 peer-checked:bg-primary-container peer-[:not(:checked)]:bg-surface-container-high">
                   <span class="material-symbols-outlined text-[18px] hidden peer-checked:inline">check</span>
                 </div>
                 <span class="font-body-md text-body-md text-on-surface group-hover:text-primary select-none peer-checked:line-through peer-checked:opacity-50">
-                  Avoid caffeine in the 6 hours before sleep.
-                </span>
-              </label>
-
-              <!-- Item 3 -->
-              <label class="group flex items-center gap-space-md min-h-[44px] p-space-sm rounded-lg bg-surface-container-low hover:bg-surface-container-high cursor-pointer transition-colors border border-white/5">
-                <input class="peer hidden" id="check-3" onchange="updateChecklistState()" type="checkbox"/>
-                <div class="w-6 h-6 rounded-lg bg-surface-container-high flex items-center justify-center text-on-primary-container shrink-0 peer-checked:bg-primary-container peer-[:not(:checked)]:bg-surface-container-high">
-                  <span class="material-symbols-outlined text-[18px] hidden peer-checked:inline">check</span>
-                </div>
-                <span class="font-body-md text-body-md text-on-surface group-hover:text-primary select-none peer-checked:line-through peer-checked:opacity-50">
-                  Log your sleep again tomorrow morning.
+                  {% if alert_copy %}{{ alert_copy.action }}{% else %}Follow the action in this alert and log the result.{% endif %}
                 </span>
               </label>
             </div>
@@ -197,7 +174,7 @@
             <h2 class="font-headline-sm text-headline-sm text-on-surface tracking-wide uppercase">When to escalate</h2>
           </div>
           <p class="font-body-lg text-body-lg text-on-surface-variant leading-relaxed">
-            Contact ground support if sleep stays below <span class="text-error font-headline-sm">5.0 h for 2 nights</span>, or if you notice persistent headache, confusion or dizziness.
+            {% if alert_copy %}{{ alert_copy.escalate }}{% else %}Contact the flight surgeon if this continues.{% endif %}
           </p>
           <div class="pt-space-xs">
             <button class="w-full sm:w-auto inline-flex items-center justify-center gap-space-sm px-space-lg py-space-md rounded-xl font-headline-sm text-headline-sm text-[#0A0E1A] bg-gradient-to-r from-[#FF6B35] to-[#EC4899] shadow-lg hover:opacity-95 active:scale-95 transition-all cursor-pointer font-bold"
@@ -535,19 +512,14 @@
   });
 
   function updateChecklistState() {
-    const c1 = document.getElementById('check-1');
-    const c2 = document.getElementById('check-2');
-    const c3 = document.getElementById('check-3');
+    const boxes = document.querySelectorAll('#checklist-group input[type="checkbox"]');
     const counter = document.getElementById('action-counter');
-    
     let count = 0;
-    if (c1 && c1.checked) count++;
-    if (c2 && c2.checked) count++;
-    if (c3 && c3.checked) count++;
+    boxes.forEach(function(box) { if (box.checked) count++; });
 
     if (counter) {
-      counter.textContent = count + ' of 3 done';
-      if (count === 3) {
+      counter.textContent = count + ' of ' + boxes.length + ' done';
+      if (boxes.length && count === boxes.length) {
         counter.classList.remove('text-primary');
         counter.classList.add('text-primary-fixed');
       } else {
@@ -558,12 +530,12 @@
   }
 
   function logManualAction() {
-    const c2 = document.getElementById('check-2');
-    const c3 = document.getElementById('check-3');
-    if (c2 && !c2.checked) {
-      c2.checked = true;
-    } else if (c3 && !c3.checked) {
-      c3.checked = true;
+    const boxes = document.querySelectorAll('#checklist-group input[type="checkbox"]');
+    for (const box of boxes) {
+      if (!box.checked) {
+        box.checked = true;
+        break;
+      }
     }
     updateChecklistState();
 

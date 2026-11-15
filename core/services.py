@@ -667,6 +667,10 @@ def sync_alerts_for_astronaut(astronaut):
             .order_by('-mission_day', '-timestamp')
             .first()
         )
+        from core.alert_texts import message_for, title_for
+
+        science_title = title_for(metric, severity)
+        science_message = message_for(metric, severity)
         baseline = eval_res['baseline']
         baseline_text = f" Your baseline is {baseline:.1f} {eval_res['unit']}." if baseline is not None else ""
 
@@ -674,8 +678,8 @@ def sync_alerts_for_astronaut(astronaut):
             astronaut=astronaut,
             metric=metric,
             severity=severity,
-            title=f"{eval_res['display_label']} {severity}",
-            message=f"{eval_res['reason']}{baseline_text}",
+            title=science_title or f"{eval_res['display_label']} {severity}",
+            message=science_message or f"{eval_res['reason']}{baseline_text}",
             mission_day=latest_reading.mission_day,
             timestamp=latest_reading.timestamp,
             acknowledged=False,
