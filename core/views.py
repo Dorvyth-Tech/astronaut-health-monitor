@@ -20,6 +20,7 @@ from telemetry.models import Reading, CheckIn
 from alerts.models import Alert
 from core.constants import METRIC_CONFIG, METRICS
 from core.companion import build_companion_answers
+from core.llm import rephrase_with_llm
 from core.services import (
     baseline_details,
     get_baselines,
@@ -146,11 +147,12 @@ def logout_view(request):
 
 
 def companion_answers_for(astronaut, metric_evals, health_score):
-    """The companion's answers for one astronaut (layer 1: fixed rules, no AI model).
+    """The companion's answers for one astronaut.
 
     This is the one place that gathers the numbers from the database and hands them
-    to core/companion.py. Layer 2 (an optional AI rephrase, see the docstring in
-    core/companion.py) would be called right here, on the returned list.
+    to core/companion.py (layer 1: fixed rules). If COMPANION_LLM_ENABLED is True,
+    layer 2 (core/llm.py) may then rephrase the wording. It never changes the facts
+    and falls back to the layer-1 answers on any problem.
     """
     rows = (
         Reading.objects.filter(astronaut=astronaut, metric__in=METRICS)
@@ -159,7 +161,10 @@ def companion_answers_for(astronaut, metric_evals, health_score):
     )
     source_counts = {row['source']: row['n'] for row in rows}
     open_alerts = Alert.objects.filter(astronaut=astronaut, acknowledged=False).count()
-    return build_companion_answers(metric_evals, health_score, source_counts, open_alerts)
+    answers = build_companion_answers(metric_evals, health_score, source_counts, open_alerts)
+    if settings.COMPANION_LLM_ENABLED:
+        answers = rephrase_with_llm(answers)
+    return answers
 
 
 @require_GET

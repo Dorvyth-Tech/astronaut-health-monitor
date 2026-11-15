@@ -403,6 +403,9 @@
         <div class="absolute left-0 top-0 bottom-0 w-1 {% if item.severity == 'caution' %}bg-[#FFB020]{% elif item.severity == 'critical' %}bg-error{% elif item.severity == 'nominal' %}bg-[#22E3A0]{% else %}bg-outline{% endif %}"></div>
 
         <p class="font-body-md text-body-md text-on-surface pl-space-xs">{{ item.answer }}</p>
+        {% if item.ai_rephrased %}
+        <p data-companion-ai class="font-label-sm text-label-sm text-outline pl-space-xs">Rephrased by AI ({{ item.ai_provider }})</p>
+        {% endif %}
 
         {% if item.escalation %}
         <p class="font-headline-sm text-headline-sm text-error font-semibold pl-space-xs">{{ item.escalation }}</p>

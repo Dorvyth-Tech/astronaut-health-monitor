@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 
 from decouple import config
@@ -17,6 +18,11 @@ ALLOWED_HOSTS = ['*']
 # the one-click demo logins and the shared demo password. It is OFF unless the
 # DEMO_MODE environment variable (or a .env file) says true. See .env.example.
 DEMO_MODE = config('DEMO_MODE', default=False, cast=bool)
+
+# Companion layer 2: an optional AI model that only rephrases the rule-based answers
+# (core/llm.py). OFF by default, and always off while running tests so the test
+# suite never touches the network. Keys and provider: see .env.example.
+COMPANION_LLM_ENABLED = config('COMPANION_LLM_ENABLED', default=False, cast=bool) and 'test' not in sys.argv
 
 # Application definition
 

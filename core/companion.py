@@ -13,14 +13,10 @@ It never invents a threshold, never detects mood or hormones, and never
 diagnoses. The 'why' text of each indicator is the rule's own reason sentence
 (core/rules.py), word for word. The rest is fixed, friendly wording.
 
-Layer 2 (NOT built yet): an optional language model could rephrase these SAME
-answers in a more conversational way. The plan is:
-  1. read the key from the COMPANION_LLM_API_KEY environment variable,
-  2. write one new function, rephrase_with_llm(answers), that gets ONLY the
-     answer dicts returned below (never raw readings, never other users' data),
-  3. if the key is missing or anything fails, return the answers unchanged,
-  4. call it in core.views.companion_answers_for(), right after
-     build_companion_answers(). Nothing else in the app has to change.
+Layer 2 (optional, built in core/llm.py): rephrase_with_llm(answers) can ask a
+language model (Groq or Gemini) to reword ONLY the main answer text. It is off
+unless COMPANION_LLM_ENABLED=True, it is called from core.views.companion_answers_for,
+and it falls back to these exact answers on any failure or unsafe rewrite.
 
 Each answer is a dict with these keys:
   id              short stable name: overall, why_<indicator>, what_to_do, data_source
