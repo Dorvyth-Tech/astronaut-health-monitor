@@ -210,6 +210,13 @@
           <span class="font-headline-sm text-headline-sm tracking-wide">History</span>
         </a>
 
+        <!-- 3b. CSV Upload -->
+        <a class="flex items-center gap-space-sm px-space-md py-space-sm rounded-xl transition-all {% if active_nav == 'upload' %}bg-primary-container text-on-primary-container font-headline-sm text-headline-sm shadow-[0_0_14px_rgba(0,240,255,0.25)]{% else %}text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface{% endif %}"
+           href="{% url 'telemetry:upload_csv' %}">
+          <span class="material-symbols-outlined text-[20px]">upload_file</span>
+          <span class="font-headline-sm text-headline-sm tracking-wide">Upload CSV</span>
+        </a>
+
         <!-- 4. Profile & Baselines -->
         <a class="flex items-center gap-space-sm px-space-md py-space-sm rounded-xl transition-all {% if active_nav == 'profile' %}bg-primary-container text-on-primary-container font-headline-sm text-headline-sm shadow-[0_0_14px_rgba(0,240,255,0.25)]{% else %}text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface{% endif %}"
            href="{% url 'core:profile' %}">

@@ -40,6 +40,20 @@ BASELINE_PLAUSIBLE_RANGE = {
     'cabin_co2': (300, 10000),
 }
 
+# Plausibility limits for ONE reading in a CSV upload. Like the baseline limits these
+# only catch typos and unit mix-ups (a sleep of 70 hours, a temperature of 98.6 in
+# Fahrenheit). They are NOT clinical thresholds: the status rules live in core/rules.py.
+READING_PLAUSIBLE_RANGE = {
+    'resting_hr': (20, 250),
+    'hrv': (1, 300),
+    'sleep': (0, 24),
+    'exercise': (0, 1440),
+    'body_temp': (30, 43),
+    'mood': (1, 5),
+    'mood_stress': (1, 10),
+    'cabin_co2': (200, 50000),
+}
+
 SEVERITY_CHOICES = [
     ('nominal', 'Nominal'),
     ('caution', 'Caution'),

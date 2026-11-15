@@ -4,7 +4,7 @@ Telemetry views and API endpoints for Space-Pulse.
 
 from datetime import timedelta
 from django.shortcuts import render, redirect
-from django.http import JsonResponse
+from django.http import HttpResponse, JsonResponse
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
@@ -13,9 +13,10 @@ from core.views import get_active_astronaut
 from telemetry.models import Reading, CheckIn
 from alerts.models import Alert
 from core.models import Baseline
-from core.constants import METRIC_CONFIG, METRICS, METRIC_CHOICES
+from core.constants import METRIC_CONFIG, METRICS, METRIC_CHOICES, READING_PLAUSIBLE_RANGE
 from core.services import sync_alerts_for_astronaut, reading_statuses, amber_edges, generate_sparkline_svg, get_baselines
 from django.core.paginator import Paginator
+from telemetry import csv_import
 
 
 def api_readings(request):
@@ -117,6 +118,66 @@ def add_reading(request):
         })
 
     return redirect(request.META.get('HTTP_REFERER', reverse('core:dashboard')))
+
+
+SHOWN_REJECTED_ROWS = 100     # rows listed on the page; the downloadable report has all of them
+
+
+def upload_csv_view(request):
+    """
+    CSV upload page (SRS FR-07 / FR-08). Readings are always saved for the
+    logged-in user's own astronaut (the demo-mode active astronaut in DEMO_MODE):
+    no astronaut id is ever read from the request.
+    """
+    astronaut = get_active_astronaut(request)
+    if not astronaut:
+        return redirect('core:login')
+
+    result = None
+    error_message = None
+
+    if request.method == 'POST':
+        upload = request.FILES.get('csv_file')
+        if not upload:
+            error_message = "Choose a CSV file first."
+        else:
+            try:
+                result = csv_import.import_readings_csv(astronaut, upload)
+            except csv_import.CsvFileError as error:
+                error_message = str(error)
+            else:
+                if result['imported']:
+                    sync_alerts_for_astronaut(astronaut)    # same alert update as a manual reading
+                # Kept for the "Download report" link.
+                request.session['csv_rejected'] = result['rejected']
+
+    return render(request, 'telemetry/upload.html', {
+        'active_nav': 'upload',
+        'current_astronaut': astronaut,
+        'result': result,
+        'shown_rejected': result['rejected'][:SHOWN_REJECTED_ROWS] if result else [],
+        'error_message': error_message,
+        'metric_keys': list(READING_PLAUSIBLE_RANGE),
+        'max_kb': csv_import.MAX_FILE_BYTES // 1000,
+        'max_rows': csv_import.MAX_ROWS,
+    })
+
+
+def csv_template_view(request):
+    """Sample CSV with the right header and a few example rows."""
+    response = HttpResponse(csv_import.sample_csv_text(), content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="space-pulse-readings-template.csv"'
+    return response
+
+
+def csv_rejected_view(request):
+    """The rejected-row report of this session's last upload, as a CSV download."""
+    rejected = request.session.get('csv_rejected')
+    if not rejected:
+        return redirect('telemetry:upload_csv')
+    response = HttpResponse(csv_import.rejected_rows_to_csv(rejected), content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="space-pulse-rejected-rows.csv"'
+    return response
 
 
 def check_in_view(request):
