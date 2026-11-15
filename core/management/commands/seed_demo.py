@@ -295,7 +295,7 @@ class Command(BaseCommand):
                             value=m_val,
                             mission_day=day,
                             timestamp=day_timestamp,
-                            source='manual' if m_key in ('mood', 'mood_stress') else 'sensor'
+                            source='simulated',
                         )
                     )
 
@@ -490,7 +490,7 @@ class Command(BaseCommand):
                     value=round(ppm, 0),
                     mission_day=142 if hours_ago < 24 else 141,
                     timestamp=end - timedelta(hours=hours_ago),
-                    source='sensor',
+                    source='simulated',
                 ))
         Reading.objects.bulk_create(co2_rows)
 

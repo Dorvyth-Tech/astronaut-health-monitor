@@ -10,7 +10,12 @@ what the views and templates already understand.
 
 from django.utils import timezone
 from core import rules
-from core.constants import EXERCISE_WEEKLY_PLAN_MINUTES, METRIC_CONFIG, METRICS
+from core.constants import (
+    BASELINE_PLAUSIBLE_RANGE,
+    EXERCISE_WEEKLY_PLAN_MINUTES,
+    METRIC_CONFIG,
+    METRICS,
+)
 
 
 NUMBER_WORDS = {
@@ -125,6 +130,111 @@ def rule_baseline(astronaut, metric_key, stored_baselines):
     return rules.compute_baseline(list(early))
 
 
+# --- personal baselines ----------------------------------------------------
+# A baseline is COMPUTED by default (mean of mission days 1-14). Someone may
+# override it by hand; that is stored with a flag and always shown as a
+# "Manual override".
+
+def baseline_details(astronaut):
+    """metric -> {'value', 'kind', 'by', 'at'} for one astronaut.
+
+    kind is:
+      'manual'   a stored override (by = the user, at = when)
+      'computed' the mean of days 1-14, rounded to 1 decimal
+      'stored'   not enough readings to compute yet, so the saved value is used
+    A metric with none of these is left out (the rules then fail closed).
+    """
+    from core.models import Baseline
+    from telemetry.models import Reading
+
+    rows = {row.metric: row for row in Baseline.objects.filter(astronaut=astronaut)}
+    details = {}
+    for metric in list(METRICS) + [m for m in rows if m not in METRICS]:
+        row = rows.get(metric)
+        if row is not None and row.is_manual_override:
+            details[metric] = {
+                'value': row.baseline_value,
+                'kind': 'manual',
+                'by': row.overridden_by,
+                'at': row.overridden_at,
+            }
+            continue
+
+        early = Reading.objects.filter(
+            astronaut=astronaut, metric=metric, mission_day__lte=rules.BASELINE_DAYS
+        ).values_list('mission_day', 'value')
+        computed = rules.compute_baseline(list(early))
+        if computed is not None:
+            details[metric] = {'value': round(computed, 1), 'kind': 'computed'}
+        elif row is not None:
+            details[metric] = {'value': row.baseline_value, 'kind': 'stored'}
+    return details
+
+
+def get_baselines(astronaut):
+    """metric -> the baseline number to use (override, else computed, else stored)."""
+    return {metric: item['value'] for metric, item in baseline_details(astronaut).items()}
+
+
+def read_baseline_form(post, details):
+    """Read the profile form. Returns (changes, errors).
+
+    changes maps metric -> a new number (a manual override), or None, which means
+    "go back to the computed baseline". Values that did not change are skipped,
+    so just pressing Save does not turn every baseline into an override.
+    """
+    changes = {}
+    errors = []
+    for metric in METRICS:
+        label = METRIC_CONFIG[metric]['label']
+
+        if post.get(f'reset_{metric}'):
+            if details.get(metric, {}).get('kind') == 'manual':
+                changes[metric] = None
+            continue
+
+        raw = post.get(f'baseline_{metric}')
+        if raw is None or raw == '':
+            continue
+        try:
+            value = float(raw)
+        except ValueError:
+            errors.append(f"{label}: '{raw}' is not a number.")
+            continue
+
+        current = details.get(metric, {}).get('value')
+        if current is not None and abs(value - current) < 0.0001:
+            continue    # unchanged
+
+        low, high = BASELINE_PLAUSIBLE_RANGE[metric]
+        if not low <= value <= high:
+            errors.append(f"{label}: {raw} is outside the plausible range {low} to {high}.")
+            continue
+        changes[metric] = value
+    return changes, errors
+
+
+def save_baseline_changes(astronaut, changes, user):
+    """Store what read_baseline_form returned: overrides, or a reset to computed."""
+    from core.models import Baseline
+
+    for metric, value in changes.items():
+        if value is None:
+            # Back to computed: just remove the override row.
+            Baseline.objects.filter(astronaut=astronaut, metric=metric).delete()
+        else:
+            Baseline.objects.update_or_create(
+                astronaut=astronaut,
+                metric=metric,
+                defaults={
+                    'baseline_value': value,
+                    'is_manual_override': True,
+                    'overridden_by': user,
+                    'overridden_at': timezone.now(),
+                },
+            )
+
+
 # --- evaluating ------------------------------------------------------------
 
 def evaluate_metric_status(metric_key, series, baseline_value=None, rhr_status=None):
@@ -176,8 +286,7 @@ def evaluate_astronaut_metrics(astronaut, stored_baselines=None):
     Resting HR is evaluated first because the HRV rule needs its status.
     """
     if stored_baselines is None:
-        from core.models import Baseline
-        stored_baselines = {b.metric: b.baseline_value for b in Baseline.objects.filter(astronaut=astronaut)}
+        stored_baselines = get_baselines(astronaut)
 
     evals = {}
     rhr_status = None

@@ -102,6 +102,7 @@ class CoreViewsTests(TestCase):
             password="validAccess2026"
         )
         Baseline.objects.create(astronaut=self.astronaut, metric='sleep', baseline_value=7.2)
+        self.client.force_login(self.user)   # every page needs a login now
 
     def test_dashboard_view(self):
         resp = self.client.get(reverse('core:dashboard'))

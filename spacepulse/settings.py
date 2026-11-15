@@ -1,5 +1,7 @@
 from pathlib import Path
 
+from decouple import config
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -10,6 +12,11 @@ SECRET_KEY = 'django-insecure-spacepulse-secret-key-deep-space-mars-2026'
 DEBUG = True
 
 ALLOWED_HOSTS = ['*']
+
+# DEMO_MODE turns on the shortcuts we only want for a demo: the crew switcher,
+# the one-click demo logins and the shared demo password. It is OFF unless the
+# DEMO_MODE environment variable (or a .env file) says true. See .env.example.
+DEMO_MODE = config('DEMO_MODE', default=False, cast=bool)
 
 # Application definition
 
@@ -33,6 +40,9 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    # Every view needs a login unless it is marked @login_not_required
+    # (only the login and logout views are). Admin has its own login.
+    'django.contrib.auth.middleware.LoginRequiredMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -84,6 +94,9 @@ AUTH_PASSWORD_VALIDATORS = [
         'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
     },
 ]
+
+# Where LoginRequiredMiddleware sends people who are not logged in.
+LOGIN_URL = 'core:login'
 
 # Internationalization
 LANGUAGE_CODE = 'en-us'
