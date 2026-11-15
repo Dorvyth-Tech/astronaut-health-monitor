@@ -483,7 +483,7 @@ class AIClassificationTests(AskViewTestCase):
     def test_keyword_match_does_not_call_the_classifier(self):
         with override_settings(COMPANION_LLM_ENABLED=True), \
                 mock.patch('core.views.classify_intent_with_llm') as classify, \
-                mock.patch('core.views.rephrase_with_llm', side_effect=lambda answers: answers):
+                mock.patch('core.views.rephrase_with_llm', side_effect=lambda answers, user=None: answers):
             data = self.ask("am I sleeping enough?").json()
         classify.assert_not_called()
         self.assertEqual(data['method'], 'keyword')

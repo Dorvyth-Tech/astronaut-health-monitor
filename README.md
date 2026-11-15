@@ -141,6 +141,8 @@ Copy `.env.example` to `.env` to change settings. Settings:
 | `SECRET_KEY` | built-in dev key | Set a long random value on a deploy. |
 | `ALLOWED_HOSTS` | `*` | Comma-separated host names. |
 | `CSRF_TRUSTED_ORIGINS` | `https://*.onrender.com` | Comma-separated origins allowed to POST over https. |
+| `COMPANION_LLM_RATE_LIMIT` | `20` | Max live LLM calls per logged-in user in one window. Extra calls use the rule-based answers. |
+| `COMPANION_LLM_RATE_WINDOW` | `3600` | Rate-limit window in seconds (default one hour). Cache hits do not count. |
 
 ### Deploying to Render
 - Build Command: `pip install -r requirements.txt && python manage.py collectstatic --noinput && python manage.py migrate && python manage.py seed_demo`
@@ -172,6 +174,7 @@ Crew biometric and habitat data in the demo is **simulated** and labelled as suc
 ## Use of AI
 
 The Pulse Companion's answers are **rule-based** (`core/companion.py`). An optional LLM layer (default provider Groq, model `openai/gpt-oss-20b`, with Gemini `gemini-3.5-flash-lite` as fallback) may only **rephrase** those rule-based answers and **classify** a typed question's intent by choosing from a fixed list. The model never writes the underlying answers. A safety validator rejects any rewrite that adds numbers or diagnosis-style words that were not in the original text. The LLM is off unless `COMPANION_LLM_ENABLED=True`.
+Live LLM calls are limited per logged-in user by `COMPANION_LLM_RATE_LIMIT` (default 20) in each `COMPANION_LLM_RATE_WINDOW` seconds (default 3600). Over the limit, or when the caller is anonymous, the rule-based answers are used and the model is not called.
 
 Development was AI-assisted: Grok Bot (an AI coding assistant) helped write backend code, tests and documentation. Every change was reviewed, tested and committed by a human team member. No AI-generated images or video are used. The app is hosted on Render, which is not an AI tool.
 
