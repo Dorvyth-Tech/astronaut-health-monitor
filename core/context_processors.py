@@ -2,6 +2,8 @@ from datetime import datetime
 from django.conf import settings
 from django.utils import timezone
 
+from core.ground_delay import comm_context
+
 
 def get_greeting():
     """Returns morning, afternoon, or evening based on current hour."""
@@ -60,7 +62,6 @@ def spacepulse_context(request):
         'current_astronaut': astronaut,
         'greeting': get_greeting(),
         'unacknowledged_alerts_count': unacknowledged_alerts_count,
-        'next_ground_pass': 'T-01:14:22',
-        'comm_latency': '18m 42s',
-        'orbital_sync': '99.8%',
+        # NASA's published one-way delay range; pass and link values are labelled simulated.
+        **comm_context(),
     }
