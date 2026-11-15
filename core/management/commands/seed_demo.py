@@ -437,6 +437,12 @@ class Command(BaseCommand):
                 acknowledged=True
             )
 
+        # Offline demo: a clearly labelled SAMPLE space-weather snapshot, only if none is stored yet.
+        # Real DONKI data replaces it as soon as the app can reach NASA.
+        from core import donki
+        if donki.store_sample_snapshot_if_empty():
+            self.stdout.write("Stored a labelled SAMPLE space-weather snapshot (source='sample').")
+
         self.stdout.write(self.style.SUCCESS(
             "Successfully seeded Space-Pulse database!\n"
             f"- 4 Crew Profiles (Active: Cmdr. {cmdr.name})\n"
