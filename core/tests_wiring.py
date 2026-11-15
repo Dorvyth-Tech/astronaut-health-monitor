@@ -226,7 +226,7 @@ class AmberEdgeTests(SimpleTestCase):
         self.assertEqual(amber_edges('hrv', 50.0), {'low': 42.5, 'high': None})
         self.assertEqual(amber_edges('body_temp', 36.7), {'low': None, 'high': 37.2})
         self.assertEqual(amber_edges('cabin_co2', 2450.0), {'low': None, 'high': 3500.0})
-        self.assertEqual(amber_edges('mood', 4.0), {'low': 3.5, 'high': None})
+        self.assertEqual(amber_edges('mood', 4.0), {'low': 3.0, 'high': None})
 
     def test_exercise_edge_is_90_percent_of_the_150_minute_plan_per_day(self):
         # 150 / 7 * 0.9 = 19.29 min per day, whatever the stored baseline is

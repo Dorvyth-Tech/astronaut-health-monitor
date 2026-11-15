@@ -267,30 +267,26 @@ def _sleep(readings, baseline, extras):
 def _mood(readings, baseline, extras):
     """Mood / fatigue score (1-5). Points below baseline.
 
-    Amber: drop of 1 for 3 days. Here: a drop of MORE than 0.5 (assumes Q6,
-           which closes the 0.5-1.0 gap in the science table).
-    Red:   drop of 2 for 3 days, or drop of 1 for 7 days.
+    Amber: drop of 1 point or more for 3 days (Science Lead table, verbatim).
+    Red:   drop of 2 points or more for 3 days, or drop of 1 point or more for 7 days.
+    A drop of less than 1 point stays green, including the 0.5-1.0 gap in the table.
     """
     if baseline is None:
         return _no_baseline("Mood")
 
-    def dropped(points, strict=False):
-        if strict:
-            return lambda v: _r(baseline - v) > points
+    def dropped(points):
         return lambda v: _r(baseline - v) >= points
 
     deep_days = len(_run(readings, dropped(2)))
     long_days = len(_run(readings, dropped(1)))
-    amber_days = len(_run(readings, dropped(0.5, strict=True)))
     drop = _r(baseline - readings[-1][1])
     if deep_days >= 3:
         return RuleResult(RED, f"Mood {drop:g} points below baseline for {deep_days} days.")
     if long_days >= 7:
         return RuleResult(RED, f"Mood {drop:g} points below baseline for {long_days} days.")
-    if amber_days >= 3:
-        return RuleResult(AMBER, f"Mood {drop:g} points below baseline for {amber_days} days.")
-    return RuleResult(GREEN, f"Mood {-drop:+g} points from baseline; no 3-day run with a drop of more than 0.5.")
-
+    if long_days >= 3:
+        return RuleResult(AMBER, f"Mood {drop:g} points below baseline for {long_days} days.")
+    return RuleResult(GREEN, f"Mood {-drop:+g} points from baseline; no 3-day run with a drop of 1 point or more.")
 
 def _cabin_co2(readings, baseline, extras):
     """Cabin CO2 in ppm, hourly readings. Absolute: no baseline needed.

@@ -357,7 +357,7 @@ def amber_edges(metric_key, baseline):
         # The chart shows minutes per day, the plan is per week: 90% of the plan, per day.
         edges['low'] = EXERCISE_WEEKLY_PLAN_MINUTES / 7 * 0.90
     elif metric_key == 'mood':
-        edges['low'] = baseline - 0.5          # more than 0.5 points below baseline
+        edges['low'] = baseline - 1.0          # drop of 1 point or more below baseline
     elif metric_key == 'resting_hr':
         edges['high'] = baseline * 1.10        # more than 10% above
     elif metric_key == 'body_temp':

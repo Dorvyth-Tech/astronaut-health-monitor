@@ -148,10 +148,15 @@ def message_for(indicator, severity):
     return " ".join((parts["what"], parts["why"], parts["action"], parts["escalate"]))
 
 
+# Display labels follow the rest of the UI (status_label / SEVERITY_STYLE):
+# green Nominal, amber Caution, red Critical. DB values stay caution/critical.
+DISPLAY_STATE = {"amber": "Caution", "red": "Critical"}
+
+
 def title_for(indicator, severity):
-    """Title from the Science Lead indicator name and state, e.g. 'Sleep · Amber'."""
+    """Title from the Science Lead indicator name and the UI severity label, e.g. 'Sleep · Caution'."""
     state = state_from_severity(severity)
     name = INDICATOR_TITLES.get(indicator)
     if state is None or name is None or (indicator, state) not in ALERT_TEXTS:
         return None
-    return f"{name} \u00b7 {state.title()}"
+    return f"{name} \u00b7 {DISPLAY_STATE[state]}"
