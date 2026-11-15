@@ -38,6 +38,24 @@
       </div>
     </div>
 
+    {% if symptom_note %}
+    <!-- Environmental Symptom Correlation Banner -->
+    <div class="w-full p-space-md rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between gap-space-md shadow-md">
+      <div class="flex items-center gap-space-sm">
+        <div class="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center text-[#FFB020] shrink-0">
+          <span class="material-symbols-outlined text-[20px]">warning</span>
+        </div>
+        <div>
+          <span class="font-headline-sm text-xs uppercase tracking-wider text-[#FFB020] font-bold block">Environmental Correlation Note</span>
+          <span class="font-body-md text-xs text-on-surface">{{ symptom_note }}</span>
+        </div>
+      </div>
+      <a href="{% url 'environment:dashboard' %}" class="px-space-md py-1.5 rounded-xl bg-surface-container-high hover:bg-surface-container-highest text-primary-container text-xs font-mono uppercase tracking-wider shrink-0 transition-colors">
+        Check Environment
+      </a>
+    </div>
+    {% endif %}
+
     <!-- ROW 1: Overall Status Card (12 Columns) -->
     <div class="w-full rounded-xl bg-surface-container/70 backdrop-blur-md p-space-lg shadow-xl relative overflow-hidden border border-white/5">
       <!-- Decorative radial orbit trace in card background -->

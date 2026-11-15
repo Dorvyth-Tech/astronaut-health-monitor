@@ -1,5 +1,6 @@
 """
 Alerts views and acknowledge actions for Space-Pulse.
+Includes integration with environmental safety alerts.
 """
 
 from django.shortcuts import render, redirect, get_object_or_404
@@ -16,7 +17,7 @@ from core.services import sync_alerts_for_astronaut, amber_edges, get_baselines
 def alerts_list(request):
     """
     View showing all alerts with severity filtering, acknowledgment status,
-    and diagnostic drill-down links.
+    diagnostic drill-down links, and integrated environmental hazards.
     """
     astronaut = get_active_astronaut(request)
     if not astronaut:
@@ -91,13 +92,34 @@ def alerts_list(request):
             'acknowledged': a.acknowledged,
         })
 
+    # Integrated Environmental Hazards from Environment Monitor
+    try:
+        from environment.models import EnvironmentAlert
+        env_query = EnvironmentAlert.objects.select_related('reading').order_by('-created_at')
+        if status_filter == 'active':
+            env_query = env_query.filter(resolved=False)
+        elif status_filter == 'acknowledged':
+            env_query = env_query.filter(resolved=True)
+
+        if severity_filter == 'critical':
+            env_query = env_query.filter(severity='danger')
+        elif severity_filter == 'caution':
+            env_query = env_query.filter(severity='caution')
+        elif severity_filter == 'nominal':
+            env_query = env_query.none()
+
+        environment_alerts = list(env_query[:10])
+    except Exception:
+        environment_alerts = []
+
     return render(request, 'alerts/list.html', {
         'active_nav': 'alerts',
         'current_astronaut': astronaut,
         'alerts': alerts_data,
+        'environment_alerts': environment_alerts,
         'selected_severity': severity_filter,
         'selected_status': status_filter,
-        'total_count': total_count,
+        'total_count': total_count + len(environment_alerts),
         'critical_count': critical_count,
         'caution_count': caution_count,
         'nominal_count': nominal_count,
@@ -128,8 +150,6 @@ def alert_detail(request, alert_id):
     baseline_val = get_baselines(astronaut).get(alert.metric, METRIC_CONFIG.get(alert.metric, {}).get('default_baseline', 7.2))
 
     config = METRIC_CONFIG.get(alert.metric, {})
-    # Guide line for the chart: where the amber band starts (core/rules.py).
-    # Always a number, because the template prints it straight into JavaScript.
     edges = amber_edges(alert.metric, baseline_val)
     caution_low = next((v for v in (edges['low'], edges['high']) if v is not None), baseline_val)
     unit = config.get('unit', 'h')

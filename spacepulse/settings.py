@@ -6,10 +6,10 @@ from decouple import config
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-spacepulse-secret-key-deep-space-mars-2026'
+SECRET_KEY = config('SECRET_KEY', default='django-insecure-spacepulse-secret-key-deep-space-mars-2026')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = config('DEBUG', default=True, cast=bool)
 
 ALLOWED_HOSTS = ['*']
 
@@ -32,6 +32,7 @@ INSTALLED_APPS = [
     'core',
     'telemetry',
     'alerts',
+    'environment',
 ]
 
 MIDDLEWARE = [
@@ -110,3 +111,10 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# OpenWeather API Configuration for Environment Monitor
+OPENWEATHER_API_KEY = config('OPENWEATHER_API_KEY', default='')
+OPENWEATHER_CITY = config('OPENWEATHER_CITY', default='Cape Canaveral,US')
+
+# NASA Space Weather API (DONKI) Configuration
+NASA_API_KEY = config('NASA_API_KEY', default='DEMO_KEY')

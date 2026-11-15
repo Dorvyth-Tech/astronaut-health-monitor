@@ -1,0 +1,1038 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Environment Monitor &amp; NASA Space Weather Surveillance | Space-Pulse{% endblock %}
+
+{% block content %}
+<div class="w-full max-w-7xl mx-auto px-margin sm:px-gutter py-space-lg flex flex-col gap-space-lg">
+
+  <!-- Header & Atmospheric Station Status -->
+  <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-space-md pb-space-sm border-b border-white/5">
+    <div>
+      <div class="flex items-center gap-2 mb-1">
+        <span class="w-2 h-2 rounded-full bg-[#00F0FF] animate-pulse"></span>
+        <span class="font-label-caps text-label-caps text-outline uppercase tracking-wider">
+          Planetary Atmosphere &amp; NASA DONKI Space Weather Surveillance
+        </span>
+      </div>
+      <h1 class="font-headline-lg text-headline-lg text-primary tracking-tight">Environment Monitor</h1>
+      <p class="font-body-md text-body-md text-on-surface-variant">
+        Surveillance of life-support atmospheric composition, ambient pressure, thermal loops, and real solar radiation flux.
+      </p>
+    </div>
+
+    <!-- Live Telemetry Status Badges -->
+    <div class="flex flex-wrap items-center gap-space-sm">
+      <div id="source-badge" class="px-space-md py-1.5 rounded-xl bg-surface-container-high border border-white/5 flex items-center gap-2">
+        <span id="source-indicator" class="w-2 h-2 rounded-full bg-[#22E3A0]"></span>
+        <span id="source-text" class="font-mono text-xs text-on-surface uppercase tracking-wider font-semibold">
+          Live OpenWeather API
+        </span>
+      </div>
+
+      <div id="api-unavailable-badge" class="{% if api_available %}hidden{% endif %} px-space-md py-1.5 rounded-xl bg-caution/15 border border-caution/30 flex items-center gap-2 text-caution">
+        <span class="material-symbols-outlined text-[16px]">cloud_off</span>
+        <span class="font-mono text-xs uppercase tracking-wider font-bold">API Unavailable &mdash; Cached Data</span>
+      </div>
+
+      <button onclick="refreshEnvironmentData()"
+              id="refresh-btn"
+              class="px-space-md py-1.5 rounded-xl bg-surface-container-high hover:bg-surface-container-highest text-on-surface text-xs font-mono uppercase tracking-wider flex items-center gap-2 border border-white/5 transition-all">
+        <span class="material-symbols-outlined text-[16px] text-primary-container" id="refresh-icon">sync</span>
+        <span id="refresh-label">Sync Now</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Symptom Correlation Banner (if check-in notes overlap with active hazards) -->
+  {% if symptom_note %}
+  <div class="p-space-md rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-space-md shadow-lg">
+    <div class="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center text-caution shrink-0 mt-0.5">
+      <span class="material-symbols-outlined text-[20px]">warning</span>
+    </div>
+    <div class="flex-1">
+      <div class="font-headline-sm text-sm uppercase tracking-wider text-caution font-bold">
+        Physiological Correlation Detected
+      </div>
+      <div class="font-body-md text-sm text-on-surface mt-0.5">
+        {{ symptom_note }}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Planetary Location Tabs -->
+  <div class="flex flex-wrap items-center gap-space-xs p-1.5 rounded-2xl bg-surface-container-low border border-white/5">
+    <button onclick="switchLocation('earth')"
+            id="tab-earth"
+            class="tab-btn px-space-md py-space-xs rounded-xl font-headline-sm text-xs uppercase tracking-wider transition-all flex items-center gap-2 bg-primary-container text-on-primary-container shadow-md">
+      <span class="material-symbols-outlined text-[16px]">public</span>
+      Earth (Cape Canaveral)
+    </button>
+    <button onclick="switchLocation('orbit')"
+            id="tab-orbit"
+            class="tab-btn px-space-md py-space-xs rounded-xl font-headline-sm text-xs uppercase tracking-wider transition-all flex items-center gap-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high">
+      <span class="material-symbols-outlined text-[16px]">satellite</span>
+      Orbit (ISS / Dragon)
+      <span class="px-1.5 py-0.5 rounded text-[9px] bg-white/10 text-outline">NASA Live + Sim</span>
+    </button>
+    <button onclick="switchLocation('moon')"
+            id="tab-moon"
+            class="tab-btn px-space-md py-space-xs rounded-xl font-headline-sm text-xs uppercase tracking-wider transition-all flex items-center gap-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high">
+      <span class="material-symbols-outlined text-[16px]">dark_mode</span>
+      Moon (Artemis Base)
+      <span class="px-1.5 py-0.5 rounded text-[9px] bg-white/10 text-outline">NASA Live + Sim</span>
+    </button>
+    <button onclick="switchLocation('mars')"
+            id="tab-mars"
+            class="tab-btn px-space-md py-space-xs rounded-xl font-headline-sm text-xs uppercase tracking-wider transition-all flex items-center gap-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high">
+      <span class="material-symbols-outlined text-[16px]">planet</span>
+      Mars (Ares Hab-01)
+      <span class="px-1.5 py-0.5 rounded text-[9px] bg-white/10 text-outline">NASA Live + Sim</span>
+    </button>
+  </div>
+
+  <!-- Simulated / Hybrid Data Notice Banner -->
+  <div id="simulated-notice" class="hidden p-space-sm rounded-xl bg-surface-container/60 border border-[#00F0FF]/30 flex items-center justify-between text-xs font-mono text-[#00F0FF]">
+    <div class="flex items-center gap-2">
+      <span class="material-symbols-outlined text-[16px]">science</span>
+      <span>HYBRID TELEMETRY ARCHITECTURE &mdash; Real space weather from NASA DONKI drives radiation flux &amp; solar alerts; habitat atmospheric parameters use physics-based drift models.</span>
+    </div>
+    <span class="px-2 py-0.5 rounded bg-[#00F0FF]/20 text-[#00F0FF] uppercase font-bold text-[10px]">NASA DONKI + Sim</span>
+  </div>
+
+  <!-- 6 Environmental Condition Cards -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-space-md">
+    
+    <!-- 1. Temperature -->
+    <div class="p-space-md rounded-2xl bg-surface-container/70 backdrop-blur-md border border-white/5 flex flex-col justify-between shadow-lg relative overflow-hidden group">
+      <div class="flex items-center justify-between">
+        <span class="font-label-caps text-xs text-outline uppercase tracking-wider">Temperature</span>
+        <span id="trend-icon-temp" class="material-symbols-outlined text-[18px] text-on-surface-variant">trending_flat</span>
+      </div>
+      <div class="my-3">
+        <div class="flex items-baseline gap-1">
+          <span id="val-temp" class="font-headline-lg text-3xl font-bold text-on-surface">{{ initial_reading.temperature }}</span>
+          <span class="font-body-sm text-sm text-on-surface-variant">°C</span>
+        </div>
+        <div class="text-xs text-on-surface-variant mt-0.5 font-mono">Nominal: 18&ndash;26 °C</div>
+      </div>
+      <div class="flex items-center justify-between pt-2 border-t border-white/5">
+        <span class="text-[11px] text-outline">Thermal Loop</span>
+        <span id="status-temp" class="px-2 py-0.5 rounded-full text-[10px] font-mono uppercase font-bold bg-[#22E3A0]/20 text-[#22E3A0]">
+          Nominal
+        </span>
+      </div>
+    </div>
+
+    <!-- 2. Pressure -->
+    <div class="p-space-md rounded-2xl bg-surface-container/70 backdrop-blur-md border border-white/5 flex flex-col justify-between shadow-lg relative overflow-hidden group">
+      <div class="flex items-center justify-between">
+        <span class="font-label-caps text-xs text-outline uppercase tracking-wider">Pressure</span>
+        <span id="trend-icon-press" class="material-symbols-outlined text-[18px] text-on-surface-variant">trending_flat</span>
+      </div>
+      <div class="my-3">
+        <div class="flex items-baseline gap-1">
+          <span id="val-press" class="font-headline-lg text-3xl font-bold text-on-surface">{{ initial_reading.pressure }}</span>
+          <span class="font-body-sm text-sm text-on-surface-variant">kPa</span>
+        </div>
+        <div class="text-xs text-on-surface-variant mt-0.5 font-mono">Nominal: 70&ndash;105 kPa</div>
+      </div>
+      <div class="flex items-center justify-between pt-2 border-t border-white/5">
+        <span class="text-[11px] text-outline">Cabin Barometric</span>
+        <span id="status-press" class="px-2 py-0.5 rounded-full text-[10px] font-mono uppercase font-bold bg-[#22E3A0]/20 text-[#22E3A0]">
+          Nominal
+        </span>
+      </div>
+    </div>
+
+    <!-- 3. Humidity -->
+    <div class="p-space-md rounded-2xl bg-surface-container/70 backdrop-blur-md border border-white/5 flex flex-col justify-between shadow-lg relative overflow-hidden group">
+      <div class="flex items-center justify-between">
+        <span class="font-label-caps text-xs text-outline uppercase tracking-wider">Humidity</span>
+        <span id="trend-icon-hum" class="material-symbols-outlined text-[18px] text-on-surface-variant">trending_flat</span>
+      </div>
+      <div class="my-3">
+        <div class="flex items-baseline gap-1">
+          <span id="val-hum" class="font-headline-lg text-3xl font-bold text-on-surface">{{ initial_reading.humidity }}</span>
+          <span class="font-body-sm text-sm text-on-surface-variant">%</span>
+        </div>
+        <div class="text-xs text-on-surface-variant mt-0.5 font-mono">Nominal: 30&ndash;60 %</div>
+      </div>
+      <div class="flex items-center justify-between pt-2 border-t border-white/5">
+        <span class="text-[11px] text-outline">Moisture Balance</span>
+        <span id="status-hum" class="px-2 py-0.5 rounded-full text-[10px] font-mono uppercase font-bold bg-[#22E3A0]/20 text-[#22E3A0]">
+          Nominal
+        </span>
+      </div>
+    </div>
+
+    <!-- 4. Oxygen -->
+    <div class="p-space-md rounded-2xl bg-surface-container/70 backdrop-blur-md border border-white/5 flex flex-col justify-between shadow-lg relative overflow-hidden group">
+      <div class="flex items-center justify-between">
+        <span class="font-label-caps text-xs text-outline uppercase tracking-wider">Oxygen (O₂)</span>
+        <span id="trend-icon-o2" class="material-symbols-outlined text-[18px] text-on-surface-variant">trending_flat</span>
+      </div>
+      <div class="my-3">
+        <div class="flex items-baseline gap-1">
+          <span id="val-o2" class="font-headline-lg text-3xl font-bold text-on-surface">{{ initial_reading.oxygen_percent }}</span>
+          <span class="font-body-sm text-sm text-on-surface-variant">%</span>
+        </div>
+        <div class="text-xs text-on-surface-variant mt-0.5 font-mono">Nominal: 19.5&ndash;24.5 %</div>
+      </div>
+      <div class="flex items-center justify-between pt-2 border-t border-white/5">
+        <span class="text-[11px] text-outline">ECLSS Delivery</span>
+        <span id="status-o2" class="px-2 py-0.5 rounded-full text-[10px] font-mono uppercase font-bold bg-[#22E3A0]/20 text-[#22E3A0]">
+          Nominal
+        </span>
+      </div>
+    </div>
+
+    <!-- 5. Carbon Dioxide -->
+    <div class="p-space-md rounded-2xl bg-surface-container/70 backdrop-blur-md border border-white/5 flex flex-col justify-between shadow-lg relative overflow-hidden group">
+      <div class="flex items-center justify-between">
+        <span class="font-label-caps text-xs text-outline uppercase tracking-wider">CO₂ Level</span>
+        <span id="trend-icon-co2" class="material-symbols-outlined text-[18px] text-on-surface-variant">trending_flat</span>
+      </div>
+      <div class="my-3">
+        <div class="flex items-baseline gap-1">
+          <span id="val-co2" class="font-headline-lg text-3xl font-bold text-on-surface">{{ initial_reading.co2_ppm }}</span>
+          <span class="font-body-sm text-sm text-on-surface-variant">ppm</span>
+        </div>
+        <div class="text-xs text-on-surface-variant mt-0.5 font-mono">Max Nominal: 2,500 ppm</div>
+      </div>
+      <div class="flex items-center justify-between pt-2 border-t border-white/5">
+        <span class="text-[11px] text-outline">CDRA Scrubber</span>
+        <span id="status-co2" class="px-2 py-0.5 rounded-full text-[10px] font-mono uppercase font-bold bg-[#22E3A0]/20 text-[#22E3A0]">
+          Nominal
+        </span>
+      </div>
+    </div>
+
+    <!-- 6. Radiation Level (NASA DONKI Live + Physical Baseline) -->
+    <div class="p-space-md rounded-2xl bg-surface-container/70 backdrop-blur-md border border-white/5 flex flex-col justify-between shadow-lg relative overflow-hidden group">
+      <div class="flex items-center justify-between">
+        <span class="font-label-caps text-xs text-outline uppercase tracking-wider">Radiation Dose</span>
+        <span id="trend-icon-rad" class="material-symbols-outlined text-[18px] text-on-surface-variant">trending_flat</span>
+      </div>
+      <div class="my-2">
+        <div class="flex items-baseline gap-1">
+          <span id="val-rad" class="font-headline-lg text-3xl font-bold text-on-surface">{{ initial_reading.radiation_level }}</span>
+          <span class="font-body-sm text-sm text-on-surface-variant">µSv/h</span>
+        </div>
+        <div class="flex items-center gap-1.5 mt-1 flex-wrap">
+          <span id="rad-source-badge" class="px-1.5 py-0.5 rounded text-[9px] font-mono uppercase font-bold bg-[#00F0FF]/15 text-[#00F0FF]">
+            NASA Live Data
+          </span>
+          <span id="rad-event-cause" class="text-[10px] text-outline truncate block max-w-[130px]" title="Driven by NASA space weather">
+            Active Solar Flux
+          </span>
+        </div>
+      </div>
+      <div class="pt-2 border-t border-white/5">
+        <div class="flex items-center justify-between">
+          <span class="text-[11px] text-outline">Dosimetry</span>
+          <span id="status-rad" class="px-2 py-0.5 rounded-full text-[10px] font-mono uppercase font-bold bg-[#22E3A0]/20 text-[#22E3A0]">
+            Nominal
+          </span>
+        </div>
+        <div id="rad-crew-advice" class="text-[10px] text-on-surface-variant font-mono mt-1 truncate" title="Standard spaceflight baseline">
+          Standard operational dosimetry.
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Main Chart Section: 24-Hour Longitudinal Trend with Safe-Range Band -->
+  <div class="p-space-lg rounded-2xl bg-surface-container/70 backdrop-blur-md border border-white/5 shadow-xl flex flex-col gap-space-md">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-space-sm pb-space-xs border-b border-white/5">
+      <div>
+        <div class="font-label-caps text-xs text-outline uppercase tracking-wider">Longitudinal Horizon</div>
+        <h2 class="font-headline-sm text-lg text-on-surface">24-Hour Atmospheric Trajectory &amp; Safe Margins</h2>
+      </div>
+
+      <!-- Metric Chart Selectors -->
+      <div class="flex flex-wrap items-center gap-1.5 p-1 rounded-xl bg-surface-container-high border border-white/5">
+        <button onclick="setChartMetric('temperature')"
+                id="btn-metric-temp"
+                class="chart-metric-btn px-2.5 py-1 rounded-lg text-xs font-mono uppercase tracking-wider bg-primary-container text-on-primary-container font-semibold transition-all">
+          Temp
+        </button>
+        <button onclick="setChartMetric('pressure')"
+                id="btn-metric-press"
+                class="chart-metric-btn px-2.5 py-1 rounded-lg text-xs font-mono uppercase tracking-wider text-on-surface-variant hover:text-on-surface transition-all">
+          Pressure
+        </button>
+        <button onclick="setChartMetric('humidity')"
+                id="btn-metric-hum"
+                class="chart-metric-btn px-2.5 py-1 rounded-lg text-xs font-mono uppercase tracking-wider text-on-surface-variant hover:text-on-surface transition-all">
+          Humidity
+        </button>
+        <button onclick="setChartMetric('oxygen_percent')"
+                id="btn-metric-o2"
+                class="chart-metric-btn px-2.5 py-1 rounded-lg text-xs font-mono uppercase tracking-wider text-on-surface-variant hover:text-on-surface transition-all">
+          Oxygen
+        </button>
+        <button onclick="setChartMetric('co2_ppm')"
+                id="btn-metric-co2"
+                class="chart-metric-btn px-2.5 py-1 rounded-lg text-xs font-mono uppercase tracking-wider text-on-surface-variant hover:text-on-surface transition-all">
+          CO₂
+        </button>
+        <button onclick="setChartMetric('radiation_level')"
+                id="btn-metric-rad"
+                class="chart-metric-btn px-2.5 py-1 rounded-lg text-xs font-mono uppercase tracking-wider text-on-surface-variant hover:text-on-surface transition-all">
+          Radiation
+        </button>
+      </div>
+    </div>
+
+    <!-- Chart Canvas -->
+    <div class="w-full h-72 relative">
+      <canvas id="environmentChart"></canvas>
+    </div>
+
+    <!-- Safe Range Shaded Band Indicator Legend -->
+    <div class="flex items-center justify-between text-xs font-mono text-on-surface-variant pt-2 border-t border-white/5">
+      <div class="flex items-center gap-4">
+        <div class="flex items-center gap-1.5">
+          <span class="w-3 h-3 rounded bg-primary-container/20 border border-primary-container inline-block"></span>
+          <span>Target Safe Physiological Band</span>
+        </div>
+        <div class="flex items-center gap-1.5">
+          <span class="w-3 h-1 bg-[#00F0FF] inline-block"></span>
+          <span id="chart-legend-label">Recorded Atmospheric Trajectory</span>
+        </div>
+      </div>
+      <div id="chart-safe-summary" class="hidden sm:block text-outline">
+        Safe Bounds: 18.0 &ndash; 26.0 °C
+      </div>
+    </div>
+  </div>
+
+  <!-- Space Weather Surveillance Panel (NASA DONKI Live Integration) -->
+  <div class="p-space-lg rounded-2xl bg-surface-container/70 backdrop-blur-md border border-white/5 shadow-xl flex flex-col gap-space-md">
+    
+    <!-- Panel Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-space-sm pb-space-xs border-b border-white/5">
+      <div>
+        <div class="flex items-center gap-2 mb-0.5">
+          <span class="w-2 h-2 rounded-full bg-[#EC4899] animate-pulse"></span>
+          <span class="font-label-caps text-xs text-outline uppercase tracking-wider">
+            NASA DONKI Heliophysics Fleet Surveillance
+          </span>
+        </div>
+        <h2 class="font-headline-sm text-lg text-primary">Space Weather 7-Day Solar Horizon</h2>
+      </div>
+
+      <div class="flex items-center gap-space-sm">
+        <div id="sw-api-status" class="px-2.5 py-1 rounded-xl bg-surface-container-high border border-white/5 flex items-center gap-1.5 text-xs font-mono">
+          <span id="sw-api-dot" class="w-1.5 h-1.5 rounded-full {% if nasa_api_available %}bg-[#22E3A0]{% else %}bg-caution{% endif %}"></span>
+          <span id="sw-api-label" class="uppercase text-[11px] text-on-surface">
+            {% if nasa_api_available %}NASA Live DONKI{% else %}NASA Data Cached{% endif %}
+          </span>
+        </div>
+        <button onclick="refreshSpaceWeatherData()"
+                id="sw-refresh-btn"
+                class="px-2.5 py-1 rounded-xl bg-surface-container-high hover:bg-surface-container-highest text-primary-container text-xs font-mono uppercase tracking-wider flex items-center gap-1 border border-white/5 transition-all">
+          <span class="material-symbols-outlined text-[14px]" id="sw-refresh-icon">refresh</span>
+          <span>Refresh</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- NASA Unavailable Alert State if API fails -->
+    <div id="sw-unavailable-banner" class="{% if nasa_api_available %}hidden{% endif %} p-space-sm rounded-xl bg-caution/15 border border-caution/30 flex items-center justify-between text-xs font-mono text-caution">
+      <div class="flex items-center gap-2">
+        <span class="material-symbols-outlined text-[16px]">satellite_alt</span>
+        <span>NASA DONKI API unavailable &mdash; displaying synchronized telemetry cache and mission baseline events.</span>
+      </div>
+      <span class="px-2 py-0.5 rounded bg-caution/20 text-caution uppercase font-bold text-[10px]">Cached Telemetry</span>
+    </div>
+
+    <!-- Space Weather Events List / Timeline -->
+    <div id="sw-events-container" class="space-y-3">
+      {% for event in sw_events %}
+      <div class="p-space-md rounded-xl bg-surface-container-high/60 border border-white/5 flex flex-col md:flex-row md:items-center md:justify-between gap-space-sm transition-all hover:border-primary-container/30">
+        <div class="flex items-start gap-space-sm">
+          <div class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 mt-0.5
+                      {% if event.severity == 'high' %}bg-error/20 text-error
+                      {% elif event.severity == 'moderate' %}bg-[#FFB020]/20 text-[#FFB020]
+                      {% else %}bg-[#22E3A0]/20 text-[#22E3A0]{% endif %}">
+            <span class="material-symbols-outlined text-[18px]">
+              {% if event.event_type == 'flare' %}flare
+              {% elif event.event_type == 'cme' %}cyclone
+              {% elif event.event_type == 'geomagnetic_storm' %}electric_bolt
+              {% else %}coronavirus{% endif %}
+            </span>
+          </div>
+          <div>
+            <div class="flex items-center gap-2 flex-wrap">
+              <span class="font-headline-sm text-xs uppercase tracking-wide text-on-surface font-bold">
+                {{ event.intensity }} {{ event.get_event_type_display }}
+              </span>
+              <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase
+                          {% if event.severity == 'high' %}bg-error/20 text-error
+                          {% elif event.severity == 'moderate' %}bg-[#FFB020]/20 text-[#FFB020]
+                          {% else %}bg-[#22E3A0]/20 text-[#22E3A0]{% endif %}">
+                {{ event.get_severity_display }} Severity
+              </span>
+              <span class="font-mono text-[11px] text-outline">{{ event.start_time|date:"d M H:i" }} UTC</span>
+              <span class="text-outline text-xs">·</span>
+              <span class="font-mono text-[10px] text-outline">{{ event.external_id }}</span>
+            </div>
+            <div class="font-body-sm text-xs text-on-surface-variant mt-1">{{ event.summary }}</div>
+            <!-- Plain-language crew impact line -->
+            <div class="mt-1.5 flex items-center gap-1.5 text-xs font-mono text-primary-container">
+              <span class="material-symbols-outlined text-[14px]">shield</span>
+              <span><strong>Crew Protocol:</strong> {{ event.plain_language_advice }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      {% empty %}
+      <div class="p-space-lg rounded-xl bg-surface-container-high/40 border border-white/5 text-center text-on-surface-variant font-mono text-xs">
+        <span class="material-symbols-outlined text-[28px] text-outline block mb-1">wb_sunny</span>
+        No major solar events recorded this week &mdash; interplanetary space radiation environment nominal.
+      </div>
+      {% endfor %}
+    </div>
+
+  </div>
+
+  <!-- Two-Column Section: Leaving Earth Flight Profile & Launch Site Delta Comparison -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-space-lg">
+    
+    <!-- 1. "Leaving Earth" Flight Profile & Phase Transitions -->
+    <div class="p-space-lg rounded-2xl bg-surface-container/70 backdrop-blur-md border border-white/5 shadow-xl flex flex-col justify-between">
+      <div>
+        <div class="flex items-center justify-between pb-space-xs border-b border-white/5 mb-space-md">
+          <div>
+            <div class="font-label-caps text-xs text-outline uppercase tracking-wider">Mission Transit Horizon</div>
+            <h3 class="font-headline-sm text-base text-on-surface">"Leaving Earth" Atmospheric Shift</h3>
+          </div>
+          <span class="material-symbols-outlined text-primary-container">rocket_launch</span>
+        </div>
+
+        <p class="font-body-sm text-xs text-on-surface-variant mb-space-md">
+          Physiological stress vectors and barometric transitions experienced as astronauts leave Earth's dense atmosphere into vacuum and extraterrestrial habitats.
+        </p>
+
+        <!-- Progressive Flight Stages Timeline -->
+        <div class="relative pl-6 space-y-6 before:absolute before:left-2 before:top-2 before:bottom-2 before:w-0.5 before:bg-white/10">
+          
+          <!-- Stage 1: Surface Launch Site -->
+          <div class="relative">
+            <span class="absolute -left-6 top-1 w-2.5 h-2.5 rounded-full bg-[#22E3A0] ring-4 ring-surface-container"></span>
+            <div class="flex items-center justify-between">
+              <span class="font-headline-sm text-xs uppercase tracking-wide text-primary">Stage 1: Launch Pad (Surface)</span>
+              <span class="font-mono text-[11px] text-[#22E3A0]">Earth 1.0g</span>
+            </div>
+            <div class="grid grid-cols-3 gap-2 mt-1.5 font-mono text-xs bg-surface-container-high/60 p-2 rounded-xl border border-white/5">
+              <div><span class="text-outline text-[10px] block">Pressure</span> 101.3 kPa</div>
+              <div><span class="text-outline text-[10px] block">Gravity</span> 1.00 g</div>
+              <div><span class="text-outline text-[10px] block">Temperature</span> ~23 °C</div>
+            </div>
+          </div>
+
+          <!-- Stage 2: Ascent & Max Q -->
+          <div class="relative">
+            <span class="absolute -left-6 top-1 w-2.5 h-2.5 rounded-full bg-[#00F0FF] ring-4 ring-surface-container"></span>
+            <div class="flex items-center justify-between">
+              <span class="font-headline-sm text-xs uppercase tracking-wide text-on-surface">Stage 2: Ascent / Max Q</span>
+              <span class="font-mono text-[11px] text-caution">High G-Force (3.5g)</span>
+            </div>
+            <div class="grid grid-cols-3 gap-2 mt-1.5 font-mono text-xs bg-surface-container-high/60 p-2 rounded-xl border border-white/5">
+              <div><span class="text-outline text-[10px] block">Ext Pressure</span> 20 &rarr; 0 kPa</div>
+              <div><span class="text-outline text-[10px] block">Cabin Reg</span> 101.3 kPa</div>
+              <div><span class="text-outline text-[10px] block">Aero Temp</span> &gt;1200 °C Skin</div>
+            </div>
+          </div>
+
+          <!-- Stage 3: Low Earth Orbit (LEO) -->
+          <div class="relative">
+            <span class="absolute -left-6 top-1 w-2.5 h-2.5 rounded-full bg-secondary ring-4 ring-surface-container"></span>
+            <div class="flex items-center justify-between">
+              <span class="font-headline-sm text-xs uppercase tracking-wide text-secondary">Stage 3: Orbit (ISS / Crew Dragon)</span>
+              <span class="font-mono text-[11px] text-secondary">Microgravity (0g)</span>
+            </div>
+            <div class="grid grid-cols-3 gap-2 mt-1.5 font-mono text-xs bg-surface-container-high/60 p-2 rounded-xl border border-white/5">
+              <div><span class="text-outline text-[10px] block">Cabin Press</span> 101.3 kPa</div>
+              <div><span class="text-outline text-[10px] block">Ext Temp</span> -150 to +120 °C</div>
+              <div><span class="text-outline text-[10px] block">Radiation</span> 18.5 µSv/h</div>
+            </div>
+          </div>
+
+          <!-- Stage 4: Extraterrestrial Landing (Moon / Mars) -->
+          <div class="relative">
+            <span class="absolute -left-6 top-1 w-2.5 h-2.5 rounded-full bg-orange-400 ring-4 ring-surface-container"></span>
+            <div class="flex items-center justify-between">
+              <span class="font-headline-sm text-xs uppercase tracking-wide text-orange-400">Stage 4: Deep Space &amp; Mars Hab</span>
+              <span class="font-mono text-[11px] text-orange-400">Partial-G (0.38g)</span>
+            </div>
+            <div class="grid grid-cols-3 gap-2 mt-1.5 font-mono text-xs bg-surface-container-high/60 p-2 rounded-xl border border-white/5">
+              <div><span class="text-outline text-[10px] block">Hab Press</span> 56.5&ndash;70 kPa</div>
+              <div><span class="text-outline text-[10px] block">External O₂</span> &lt;0.1%</div>
+              <div><span class="text-outline text-[10px] block">Radiation</span> 24&ndash;48 µSv/h</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. Launch Site Comparison Card (Selected Environment vs Earth at Launch Site) -->
+    <div class="p-space-lg rounded-2xl bg-surface-container/70 backdrop-blur-md border border-white/5 shadow-xl flex flex-col justify-between">
+      <div>
+        <div class="flex items-center justify-between pb-space-xs border-b border-white/5 mb-space-md">
+          <div>
+            <div class="font-label-caps text-xs text-outline uppercase tracking-wider">Ground Reference Differential</div>
+            <h3 class="font-headline-sm text-base text-on-surface">Extraterrestrial vs Launch Site Delta</h3>
+          </div>
+          <span class="material-symbols-outlined text-outline">compare_arrows</span>
+        </div>
+
+        <p class="font-body-sm text-xs text-on-surface-variant mb-space-md">
+          Direct real-time comparison between the astronaut's active extraterrestrial habitat and live meteorological conditions at Cape Canaveral Space Force Station.
+        </p>
+
+        <!-- Differential Metric Grid -->
+        <div id="comparison-grid" class="grid grid-cols-2 gap-space-md">
+          
+          <!-- Delta Temp -->
+          <div class="p-space-md rounded-xl bg-surface-container-high/70 border border-white/5 flex flex-col justify-between">
+            <span class="text-xs font-label-caps text-outline uppercase">Thermal Variance</span>
+            <div class="my-2">
+              <span id="diff-temp" class="font-headline-lg text-2xl font-bold text-primary">&mdash;</span>
+              <span class="text-xs text-on-surface-variant font-mono">°C vs Launch</span>
+            </div>
+            <div id="earth-ref-temp" class="text-[11px] text-outline font-mono">Earth Ref: 23.5 °C</div>
+          </div>
+
+          <!-- Delta Pressure -->
+          <div class="p-space-md rounded-xl bg-surface-container-high/70 border border-white/5 flex flex-col justify-between">
+            <span class="text-xs font-label-caps text-outline uppercase">Barometric Shift</span>
+            <div class="my-2">
+              <span id="diff-press" class="font-headline-lg text-2xl font-bold text-caution">&mdash;</span>
+              <span class="text-xs text-on-surface-variant font-mono">kPa vs Sea Level</span>
+            </div>
+            <div id="earth-ref-press" class="text-[11px] text-outline font-mono">Earth Ref: 101.3 kPa</div>
+          </div>
+
+          <!-- Delta CO2 -->
+          <div class="p-space-md rounded-xl bg-surface-container-high/70 border border-white/5 flex flex-col justify-between">
+            <span class="text-xs font-label-caps text-outline uppercase">CO₂ Burden</span>
+            <div class="my-2">
+              <span id="diff-co2" class="font-headline-lg text-2xl font-bold text-caution">&mdash;</span>
+              <span class="text-xs text-on-surface-variant font-mono">ppm elevation</span>
+            </div>
+            <div id="earth-ref-co2" class="text-[11px] text-outline font-mono">Earth Ref: 420 ppm</div>
+          </div>
+
+          <!-- Delta Radiation -->
+          <div class="p-space-md rounded-xl bg-surface-container-high/70 border border-white/5 flex flex-col justify-between">
+            <span class="text-xs font-label-caps text-outline uppercase">Ionizing Flux</span>
+            <div class="my-2">
+              <span id="diff-rad" class="font-headline-lg text-2xl font-bold text-error">&mdash;</span>
+              <span class="text-xs text-on-surface-variant font-mono">µSv/h excess</span>
+            </div>
+            <div id="earth-ref-rad" class="text-[11px] text-outline font-mono">Earth Ref: 0.14 µSv/h</div>
+          </div>
+
+        </div>
+
+        <!-- Comparative Clinical Note -->
+        <div id="comparison-note" class="mt-space-md p-space-sm rounded-xl bg-surface-container-high/40 border border-white/5 text-xs text-on-surface-variant font-mono flex items-center gap-2">
+          <span class="material-symbols-outlined text-[16px] text-primary-container">info</span>
+          <span>Habitat life-support actively scrubbed to buffer extraterrestrial extremes.</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Clinical Health Impact & Physiological Risk Table -->
+  <div class="p-space-lg rounded-2xl bg-surface-container/70 backdrop-blur-md border border-white/5 shadow-xl flex flex-col gap-space-md">
+    <div class="flex items-center justify-between pb-space-xs border-b border-white/5">
+      <div>
+        <div class="font-label-caps text-xs text-outline uppercase tracking-wider">NASA HRP Environmental Risk Assessment</div>
+        <h3 class="font-headline-sm text-base text-on-surface">Atmospheric Changes &amp; Countermeasure Protocols</h3>
+      </div>
+      <span class="px-2.5 py-1 rounded-full text-xs font-mono uppercase font-bold bg-primary-container/20 text-primary-container">
+        Clinical Protocol Guide
+      </span>
+    </div>
+
+    <!-- Responsive Table -->
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-xs font-body-sm">
+        <thead>
+          <tr class="border-b border-white/10 text-outline uppercase font-label-caps text-[11px]">
+            <th class="py-3 px-3">Environmental Change</th>
+            <th class="py-3 px-3">Possible Health Effect</th>
+            <th class="py-3 px-3">Risk Level</th>
+            <th class="py-3 px-3">Recommended Medical Protocol</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-white/5 text-on-surface font-mono">
+          <tr class="hover:bg-surface-container-high/40 transition-colors">
+            <td class="py-3 px-3 font-semibold text-primary">Elevated CO₂ (&gt;2,500 ppm)</td>
+            <td class="py-3 px-3 text-on-surface-variant">Hypercapnic headache, cognitive slowdown, visual blur, sleep disturbance</td>
+            <td class="py-3 px-3"><span class="px-2 py-0.5 rounded bg-[#FFB020]/20 text-[#FFB020] font-bold">Caution</span></td>
+            <td class="py-3 px-3 text-on-surface-variant">Cycle CDRA scrubber beds; increase habitat cabin air mixing; verify airflow past crew sleep bunks.</td>
+          </tr>
+          <tr class="hover:bg-surface-container-high/40 transition-colors">
+            <td class="py-3 px-3 font-semibold text-error">Low Pressure (&lt;70 kPa)</td>
+            <td class="py-3 px-3 text-on-surface-variant">Dysbarism, decompression sickness, pulmonary atelectasis, ear barotrauma</td>
+            <td class="py-3 px-3"><span class="px-2 py-0.5 rounded bg-error/20 text-error font-bold">Danger</span></td>
+            <td class="py-3 px-3 text-on-surface-variant">Check hull seal integrity; don emergency spacesuits; administer 100% pre-breathe O₂.</td>
+          </tr>
+          <tr class="hover:bg-surface-container-high/40 transition-colors">
+            <td class="py-3 px-3 font-semibold text-error">Hypoxic Oxygen (&lt;18.0%)</td>
+            <td class="py-3 px-3 text-on-surface-variant">Hypoxia, impaired decision-making, cyanosis, loss of consciousness</td>
+            <td class="py-3 px-3"><span class="px-2 py-0.5 rounded bg-error/20 text-error font-bold">Danger</span></td>
+            <td class="py-3 px-3 text-on-surface-variant">Emergency O₂ mask donning; inspect primary ECLSS oxygen regulator valves.</td>
+          </tr>
+          <tr class="hover:bg-surface-container-high/40 transition-colors">
+            <td class="py-3 px-3 font-semibold text-error">High Radiation (&gt;25 µSv/h)</td>
+            <td class="py-3 px-3 text-on-surface-variant">DNA double-strand breakage, acute radiation syndrome, hematopoietic strain</td>
+            <td class="py-3 px-3"><span class="px-2 py-0.5 rounded bg-error/20 text-error font-bold">Danger</span></td>
+            <td class="py-3 px-3 text-on-surface-variant">Retreat to water-jacketed storm shelter; initiate prophylactic antioxidant therapy; continuous dosimeter logging.</td>
+          </tr>
+          <tr class="hover:bg-surface-container-high/40 transition-colors">
+            <td class="py-3 px-3 font-semibold text-[#FFB020]">Low Humidity (&lt;30%)</td>
+            <td class="py-3 px-3 text-on-surface-variant">Mucous membrane drying, eye irritation, epistaxis, heightened airborne particulates</td>
+            <td class="py-3 px-3"><span class="px-2 py-0.5 rounded bg-[#FFB020]/20 text-[#FFB020] font-bold">Caution</span></td>
+            <td class="py-3 px-3 text-on-surface-variant">Adjust cabin evaporator humidifier; increase daily crew oral hydration; administer saline nasal drops.</td>
+          </tr>
+          <tr class="hover:bg-surface-container-high/40 transition-colors">
+            <td class="py-3 px-3 font-semibold text-[#FFB020]">Thermal Extremes (&lt;15 or &gt;30°C)</td>
+            <td class="py-3 px-3 text-on-surface-variant">Hypothermia or heat stress, core temperature instability, cardiac strain</td>
+            <td class="py-3 px-3"><span class="px-2 py-0.5 rounded bg-[#FFB020]/20 text-[#FFB020] font-bold">Caution</span></td>
+            <td class="py-3 px-3 text-on-surface-variant">Rebalance coolant loops; check external radiator panels; inspect electrical heating elements.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- Interactive Client-side Script: Chart.js, Async API Polling & NASA Space Weather -->
+<script>
+  let currentLocation = 'earth';
+  let currentMetric = 'temperature';
+  let chartInstance = null;
+  let cachedData = null;
+
+  const METRIC_LABELS = {
+    'temperature': { label: 'Temperature', unit: '°C', color: '#00F0FF', safeMin: 18.0, safeMax: 26.0 },
+    'pressure': { label: 'Pressure', unit: 'kPa', color: '#8B5CF6', safeMin: 70.0, safeMax: 105.0 },
+    'humidity': { label: 'Humidity', unit: '%', color: '#22E3A0', safeMin: 30.0, safeMax: 60.0 },
+    'oxygen_percent': { label: 'Oxygen', unit: '%', color: '#38BDF8', safeMin: 19.5, safeMax: 24.5 },
+    'co2_ppm': { label: 'Carbon Dioxide', unit: 'ppm', color: '#FFB020', safeMin: 350.0, safeMax: 2500.0 },
+    'radiation_level': { label: 'Radiation Dose', unit: 'µSv/h', color: '#FF4D6D', safeMin: 0.0, safeMax: 5.0 },
+  };
+
+  // Switch Location Tab asynchronously
+  async function switchLocation(loc) {
+    currentLocation = loc;
+
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.className = 'tab-btn px-space-md py-space-xs rounded-xl font-headline-sm text-xs uppercase tracking-wider transition-all flex items-center gap-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high';
+    });
+
+    const activeBtn = document.getElementById('tab-' + loc);
+    if (activeBtn) {
+      activeBtn.className = 'tab-btn px-space-md py-space-xs rounded-xl font-headline-sm text-xs uppercase tracking-wider transition-all flex items-center gap-2 bg-primary-container text-on-primary-container shadow-md';
+    }
+
+    const simNotice = document.getElementById('simulated-notice');
+    if (loc === 'earth') {
+      simNotice.classList.add('hidden');
+    } else {
+      simNotice.classList.remove('hidden');
+    }
+
+    await fetchEnvironmentData(loc);
+  }
+
+  function setChartMetric(metric) {
+    currentMetric = metric;
+
+    document.querySelectorAll('.chart-metric-btn').forEach(btn => {
+      btn.className = 'chart-metric-btn px-2.5 py-1 rounded-lg text-xs font-mono uppercase tracking-wider text-on-surface-variant hover:text-on-surface transition-all';
+    });
+
+    const activeBtn = document.getElementById({
+      'temperature': 'btn-metric-temp',
+      'pressure': 'btn-metric-press',
+      'humidity': 'btn-metric-hum',
+      'oxygen_percent': 'btn-metric-o2',
+      'co2_ppm': 'btn-metric-co2',
+      'radiation_level': 'btn-metric-rad',
+    }[metric]);
+
+    if (activeBtn) {
+      activeBtn.className = 'chart-metric-btn px-2.5 py-1 rounded-lg text-xs font-mono uppercase tracking-wider bg-primary-container text-on-primary-container font-semibold transition-all';
+    }
+
+    if (cachedData && cachedData.history_24h) {
+      updateChart(cachedData.history_24h);
+    }
+  }
+
+  // Fetch Environment API
+  async function fetchEnvironmentData(loc) {
+    const icon = document.getElementById('refresh-icon');
+    if (icon) icon.classList.add('animate-spin');
+
+    try {
+      const response = await fetch(`/api/environment/?location=${encodeURIComponent(loc)}`);
+      if (!response.ok) throw new Error(`HTTP Error ${response.status}`);
+      const data = await response.json();
+      cachedData = data;
+      renderEnvironmentView(data);
+    } catch (err) {
+      console.error('Failed to retrieve environment telemetry:', err);
+    } finally {
+      if (icon) icon.classList.remove('animate-spin');
+    }
+  }
+
+  // Fetch Space Weather 7-Day Timeline API
+  async function refreshSpaceWeatherData() {
+    const icon = document.getElementById('sw-refresh-icon');
+    if (icon) icon.classList.add('animate-spin');
+
+    try {
+      const res = await fetch('/api/space-weather/?days=7');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      renderSpaceWeatherTimeline(data);
+    } catch (err) {
+      console.error('Failed to refresh NASA space weather events:', err);
+    } finally {
+      if (icon) icon.classList.remove('animate-spin');
+    }
+  }
+
+  function renderSpaceWeatherTimeline(data) {
+    const container = document.getElementById('sw-events-container');
+    const unavailableBanner = document.getElementById('sw-unavailable-banner');
+    const apiDot = document.getElementById('sw-api-dot');
+    const apiLabel = document.getElementById('sw-api-label');
+
+    if (data.nasa_api_available) {
+      unavailableBanner.classList.add('hidden');
+      apiDot.className = 'w-1.5 h-1.5 rounded-full bg-[#22E3A0]';
+      apiLabel.innerText = 'NASA Live DONKI';
+    } else {
+      unavailableBanner.classList.remove('hidden');
+      apiDot.className = 'w-1.5 h-1.5 rounded-full bg-caution';
+      apiLabel.innerText = 'NASA Data Cached';
+    }
+
+    if (!data.events || data.events.length === 0) {
+      container.innerHTML = `
+        <div class="p-space-lg rounded-xl bg-surface-container-high/40 border border-white/5 text-center text-on-surface-variant font-mono text-xs">
+          <span class="material-symbols-outlined text-[28px] text-outline block mb-1">wb_sunny</span>
+          No major solar events recorded this week &mdash; interplanetary space radiation environment nominal.
+        </div>`;
+      return;
+    }
+
+    let html = '';
+    data.events.forEach(e => {
+      let iconName = 'flare';
+      if (e.event_type === 'cme') iconName = 'cyclone';
+      else if (e.event_type === 'geomagnetic_storm') iconName = 'electric_bolt';
+      else if (e.event_type === 'solar_particle') iconName = 'coronavirus';
+
+      let sevClass = 'bg-[#22E3A0]/20 text-[#22E3A0]';
+      let iconClass = 'bg-[#22E3A0]/20 text-[#22E3A0]';
+      if (e.severity === 'high') {
+        sevClass = 'bg-error/20 text-error';
+        iconClass = 'bg-error/20 text-error';
+      } else if (e.severity === 'moderate') {
+        sevClass = 'bg-[#FFB020]/20 text-[#FFB020]';
+        iconClass = 'bg-[#FFB020]/20 text-[#FFB020]';
+      }
+
+      html += `
+        <div class="p-space-md rounded-xl bg-surface-container-high/60 border border-white/5 flex flex-col md:flex-row md:items-center md:justify-between gap-space-sm transition-all hover:border-primary-container/30">
+          <div class="flex items-start gap-space-sm">
+            <div class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${iconClass}">
+              <span class="material-symbols-outlined text-[18px]">${iconName}</span>
+            </div>
+            <div>
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="font-headline-sm text-xs uppercase tracking-wide text-on-surface font-bold">
+                  ${e.intensity} ${e.event_type_display}
+                </span>
+                <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase ${sevClass}">
+                  ${e.severity_display} Severity
+                </span>
+                <span class="font-mono text-[11px] text-outline">${e.time_display}</span>
+                <span class="text-outline text-xs">·</span>
+                <span class="font-mono text-[10px] text-outline">${e.external_id}</span>
+              </div>
+              <div class="font-body-sm text-xs text-on-surface-variant mt-1">${e.summary || ''}</div>
+              <div class="mt-1.5 flex items-center gap-1.5 text-xs font-mono text-primary-container">
+                <span class="material-symbols-outlined text-[14px]">shield</span>
+                <span><strong>Crew Protocol:</strong> ${e.advice}</span>
+              </div>
+            </div>
+          </div>
+        </div>`;
+    });
+
+    container.innerHTML = html;
+  }
+
+  // Render Telemetry Data into DOM
+  function renderEnvironmentView(data) {
+    const cur = data.current;
+    if (!cur) return;
+
+    // 1. Data Source & API Status Badges
+    const srcText = document.getElementById('source-text');
+    const srcInd = document.getElementById('source-indicator');
+    const apiUnavail = document.getElementById('api-unavailable-badge');
+
+    if (data.data_source === 'live') {
+      srcText.innerText = 'Live OpenWeather API';
+      srcInd.className = 'w-2 h-2 rounded-full bg-[#22E3A0]';
+    } else {
+      srcText.innerText = 'NASA Live DONKI + Sim Baseline';
+      srcInd.className = 'w-2 h-2 rounded-full bg-[#00F0FF]';
+    }
+
+    if (data.api_available || data.location !== 'earth') {
+      apiUnavail.classList.add('hidden');
+    } else {
+      apiUnavail.classList.remove('hidden');
+    }
+
+    // 2. Condition Cards Values
+    document.getElementById('val-temp').innerText = cur.temperature.toFixed(1);
+    document.getElementById('val-press').innerText = cur.pressure.toFixed(1);
+    document.getElementById('val-hum').innerText = cur.humidity.toFixed(1);
+    document.getElementById('val-o2').innerText = cur.oxygen_percent.toFixed(1);
+    document.getElementById('val-co2').innerText = Math.round(cur.co2_ppm).toLocaleString();
+    document.getElementById('val-rad').innerText = cur.radiation_level.toFixed(2);
+
+    // 3. Radiation Card Specialized NASA DONKI Labeling
+    const radBadge = document.getElementById('rad-source-badge');
+    const radCause = document.getElementById('rad-event-cause');
+    const radAdvice = document.getElementById('rad-crew-advice');
+
+    if (cur.radiation_source === 'nasa_live') {
+      radBadge.className = 'px-1.5 py-0.5 rounded text-[9px] font-mono uppercase font-bold bg-[#EC4899]/20 text-[#EC4899]';
+      radBadge.innerText = 'NASA Live Event';
+      radCause.innerText = cur.radiation_causal_event || 'Active Solar Elevation';
+      radAdvice.innerText = 'Solar event actively raising habitat dose.';
+    } else {
+      radBadge.className = 'px-1.5 py-0.5 rounded text-[9px] font-mono uppercase font-bold bg-[#22E3A0]/20 text-[#22E3A0]';
+      radBadge.innerText = (data.location === 'earth') ? 'Terrestrial Sea-Level' : 'Simulated Baseline';
+      radCause.innerText = 'Nominal Background Flux';
+      radAdvice.innerText = 'Standard spaceflight baseline.';
+    }
+
+    // 4. Status Badges & Pill Styling
+    function setStatusPill(elId, status) {
+      const el = document.getElementById(elId);
+      if (!el) return;
+      if (status === 'nominal') {
+        el.className = 'px-2 py-0.5 rounded-full text-[10px] font-mono uppercase font-bold bg-[#22E3A0]/20 text-[#22E3A0]';
+        el.innerText = 'Nominal';
+      } else if (status === 'caution') {
+        el.className = 'px-2 py-0.5 rounded-full text-[10px] font-mono uppercase font-bold bg-[#FFB020]/20 text-[#FFB020]';
+        el.innerText = 'Caution';
+      } else {
+        el.className = 'px-2 py-0.5 rounded-full text-[10px] font-mono uppercase font-bold bg-[#ffb4ab]/20 text-error';
+        el.innerText = 'Danger';
+      }
+    }
+
+    setStatusPill('status-temp', cur.statuses.temperature);
+    setStatusPill('status-press', cur.statuses.pressure);
+    setStatusPill('status-hum', cur.statuses.humidity);
+    setStatusPill('status-o2', cur.statuses.oxygen_percent);
+    setStatusPill('status-co2', cur.statuses.co2_ppm);
+    setStatusPill('status-rad', cur.statuses.radiation_level);
+
+    // 5. Trend Icons
+    function setTrendIcon(elId, dir) {
+      const el = document.getElementById(elId);
+      if (!el) return;
+      if (dir === 'up') {
+        el.innerText = 'trending_up';
+        el.className = 'material-symbols-outlined text-[18px] text-[#00F0FF]';
+      } else if (dir === 'down') {
+        el.innerText = 'trending_down';
+        el.className = 'material-symbols-outlined text-[18px] text-[#FFB020]';
+      } else {
+        el.innerText = 'trending_flat';
+        el.className = 'material-symbols-outlined text-[18px] text-on-surface-variant';
+      }
+    }
+
+    setTrendIcon('trend-icon-temp', cur.trends.temperature);
+    setTrendIcon('trend-icon-press', cur.trends.pressure);
+    setTrendIcon('trend-icon-hum', cur.trends.humidity);
+    setTrendIcon('trend-icon-o2', cur.trends.oxygen_percent);
+    setTrendIcon('trend-icon-co2', cur.trends.co2_ppm);
+    setTrendIcon('trend-icon-rad', cur.trends.radiation_level);
+
+    // 6. Update Launch Site Differential Card
+    const comp = data.earth_comparison;
+    if (comp) {
+      document.getElementById('diff-temp').innerText = (comp.temp_diff >= 0 ? '+' : '') + comp.temp_diff.toFixed(1);
+      document.getElementById('diff-press').innerText = (comp.pressure_diff >= 0 ? '+' : '') + comp.pressure_diff.toFixed(1);
+      document.getElementById('diff-co2').innerText = (comp.co2_diff >= 0 ? '+' : '') + Math.round(comp.co2_diff).toLocaleString();
+      document.getElementById('diff-rad').innerText = (comp.rad_diff >= 0 ? '+' : '') + comp.rad_diff.toFixed(2);
+
+      document.getElementById('earth-ref-temp').innerText = `Earth Ref: ${comp.earth_temp.toFixed(1)} °C`;
+      document.getElementById('earth-ref-press').innerText = `Earth Ref: ${comp.earth_pressure.toFixed(1)} kPa`;
+      document.getElementById('earth-ref-co2').innerText = `Earth Ref: ${Math.round(comp.earth_co2)} ppm`;
+      document.getElementById('earth-ref-rad').innerText = `Earth Ref: ${comp.earth_rad.toFixed(2)} µSv/h`;
+    } else {
+      document.getElementById('diff-temp').innerText = '0.0';
+      document.getElementById('diff-press').innerText = '0.0';
+      document.getElementById('diff-co2').innerText = '0';
+      document.getElementById('diff-rad').innerText = '0.00';
+      document.getElementById('earth-ref-temp').innerText = 'Earth Reference Active';
+      document.getElementById('earth-ref-press').innerText = 'Baseline Level';
+      document.getElementById('earth-ref-co2').innerText = 'Baseline Level';
+      document.getElementById('earth-ref-rad').innerText = 'Baseline Level';
+    }
+
+    // 7. Update 24h Trend Chart
+    updateChart(data.history_24h);
+  }
+
+  // Chart.js safe-band plugin
+  const safeRangeBandPlugin = {
+    id: 'safeRangeBand',
+    beforeDraw(chart) {
+      const cfg = METRIC_LABELS[currentMetric];
+      if (!cfg) return;
+
+      const { ctx, chartArea: { top, bottom, left, right }, scales: { y } } = chart;
+      if (!y) return;
+
+      const yMaxNom = y.getPixelForValue(cfg.safeMax);
+      const yMinNom = y.getPixelForValue(cfg.safeMin);
+
+      ctx.save();
+      ctx.fillStyle = 'rgba(0, 240, 255, 0.06)';
+      ctx.fillRect(left, Math.max(top, yMaxNom), right - left, Math.min(bottom, yMinNom) - Math.max(top, yMaxNom));
+
+      ctx.strokeStyle = 'rgba(0, 240, 255, 0.25)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
+
+      if (yMaxNom >= top && yMaxNom <= bottom) {
+        ctx.beginPath();
+        ctx.moveTo(left, yMaxNom);
+        ctx.lineTo(right, yMaxNom);
+        ctx.stroke();
+      }
+
+      if (yMinNom >= top && yMinNom <= bottom) {
+        ctx.beginPath();
+        ctx.moveTo(left, yMinNom);
+        ctx.lineTo(right, yMinNom);
+        ctx.stroke();
+      }
+
+      ctx.restore();
+    }
+  };
+
+  // Build / Update Chart.js Instance
+  function updateChart(history) {
+    const ctx = document.getElementById('environmentChart');
+    if (!ctx) return;
+
+    const metricCfg = METRIC_LABELS[currentMetric];
+    const labels = history.map(h => h.time);
+    const dataPoints = history.map(h => h[currentMetric]);
+
+    document.getElementById('chart-legend-label').innerText = `${metricCfg.label} (${metricCfg.unit})`;
+    document.getElementById('chart-safe-summary').innerText = `Safe Range: ${metricCfg.safeMin} \u2013 ${metricCfg.safeMax} ${metricCfg.unit}`;
+
+    if (chartInstance) {
+      chartInstance.destroy();
+    }
+
+    chartInstance = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: metricCfg.label,
+          data: dataPoints,
+          borderColor: metricCfg.color,
+          backgroundColor: 'transparent',
+          borderWidth: 2.5,
+          tension: 0.35,
+          pointRadius: 2.5,
+          pointBackgroundColor: metricCfg.color,
+          pointBorderColor: '#0A0E1A',
+          pointHoverRadius: 5,
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { intersect: false, mode: 'index' },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: '#171B28',
+            titleColor: '#DBFCFF',
+            bodyColor: '#DFE2F3',
+            borderColor: 'rgba(255,255,255,0.1)',
+            borderWidth: 1,
+            callbacks: {
+              label: function(context) {
+                return ` ${context.dataset.label}: ${context.parsed.y} ${metricCfg.unit}`;
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            grid: { color: 'rgba(255, 255, 255, 0.04)' },
+            ticks: { color: '#849495', font: { family: 'Space Grotesk', size: 10 } }
+          },
+          y: {
+            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+            ticks: {
+              color: '#849495',
+              font: { family: 'Space Grotesk', size: 10 },
+              callback: function(value) { return value + ' ' + metricCfg.unit; }
+            }
+          }
+        }
+      },
+      plugins: [safeRangeBandPlugin]
+    });
+  }
+
+  function refreshEnvironmentData() {
+    fetchEnvironmentData(currentLocation);
+    refreshSpaceWeatherData();
+  }
+
+  // Initial Boot & 60-Second Auto-refresh
+  document.addEventListener('DOMContentLoaded', () => {
+    fetchEnvironmentData(currentLocation);
+    setInterval(() => {
+      fetchEnvironmentData(currentLocation);
+    }, 60000);
+  });
+</script>
+{% endblock %}
