@@ -10,4 +10,5 @@ urlpatterns = [
     path('environment/', include('environment.urls')),
     path('api/environment/', environment_api_view, name='api_environment'),
     path('api/space-weather/', space_weather_api_view, name='api_space_weather'),
+    path('companion/chat/', include('companion.urls')),
 ]

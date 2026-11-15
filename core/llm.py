@@ -28,6 +28,8 @@ Settings (environment variables or .env):
                           when its key exists.
   GROQ_API_KEY, GEMINI_API_KEY
   GROQ_MODEL, GEMINI_MODEL   optional model overrides
+  COMPANION_LLM_RATE_LIMIT   live calls per user per window (default 20)
+  COMPANION_LLM_RATE_WINDOW  window length in seconds (default 3600)
 """
 
 import hashlib
@@ -58,6 +60,7 @@ TOTAL_TIMEOUT_SECONDS = 4.0     # all provider attempts for one rephrase share t
 CACHE_SECONDS = 300             # a good rephrase is reused for 5 minutes
 FAILURE_CACHE_SECONDS = 60      # after a failure, don't retry for a minute
 CACHE_PREFIX = 'companion_llm:'
+RATE_CACHE_PREFIX = 'companion_llm_rate:'
 
 # These answers are never sent to the model.
 NEVER_REPHRASE = {'data_source'}
@@ -215,6 +218,46 @@ def _parse_texts(raw):
 
 
 # =========================================================================
+# Per-user rate limit (live calls only)
+# =========================================================================
+
+def _allow_live_llm(user):
+    """True if a live provider call may be made for this user.
+
+    user=None (legacy callers and tests) is not rate-limited, so existing
+    signatures keep working. Anonymous or unauthenticated users never get a
+    live call. Authenticated users share one fixed-window counter across
+    rephrase and classify. Only call this on a cache miss so hits do not count.
+    """
+    if user is None:
+        return True
+    if not getattr(user, 'is_authenticated', False):
+        return False
+    user_id = getattr(user, 'pk', None)
+    if user_id is None:
+        return False
+    from django.conf import settings
+    try:
+        limit = int(getattr(settings, 'COMPANION_LLM_RATE_LIMIT', 20))
+        window = int(getattr(settings, 'COMPANION_LLM_RATE_WINDOW', 3600))
+    except (TypeError, ValueError):
+        limit, window = 20, 3600
+    if limit <= 0:
+        return False
+    if window <= 0:
+        window = 3600
+    key = f'{RATE_CACHE_PREFIX}{user_id}'
+    if cache.add(key, 1, window):
+        return True
+    try:
+        count = cache.incr(key)
+    except ValueError:
+        cache.set(key, 1, window)
+        return True
+    return count <= limit
+
+
+# =========================================================================
 # Public API
 # =========================================================================
 
@@ -243,7 +286,7 @@ def _ask_providers(items, order):
     return _query_providers(order, json.dumps({'answers': items}), SYSTEM_PROMPT, _parse_texts)
 
 
-def rephrase_with_llm(answers):
+def rephrase_with_llm(answers, user=None):
     """Return the answers with warmer wording where the model's rewrite is safe.
 
     Takes the list from core.companion.build_companion_answers and returns a new
@@ -263,6 +306,8 @@ def rephrase_with_llm(answers):
         key = _cache_key(items, order)
         cached = cache.get(key)
         if cached is None:
+            if not _allow_live_llm(user):
+                return answers
             result = _ask_providers(items, order)
             cached = result or {}
             cache.set(key, cached, CACHE_SECONDS if result else FAILURE_CACHE_SECONDS)
@@ -298,7 +343,7 @@ def _parse_intent(raw):
     return intent.strip()
 
 
-def classify_intent_with_llm(question, allowed_ids, descriptions=None):
+def classify_intent_with_llm(question, allowed_ids, descriptions=None, user=None):
     """Ask the model which allowed intent id the question means.
 
     Returns (id, provider_label) when the model picked an id that is in allowed_ids,
@@ -317,6 +362,8 @@ def classify_intent_with_llm(question, allowed_ids, descriptions=None):
         ).hexdigest()
         cached = cache.get(key)
         if cached is None:
+            if not _allow_live_llm(user):
+                return None
             user_text = json.dumps({
                 'question': question,
                 'allowed': {i: (descriptions or {}).get(i, i) for i in allowed},

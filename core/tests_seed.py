@@ -16,6 +16,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from alerts.models import Alert
+from core.alert_texts import message_for, title_for
 from core import rules
 from core.constants import METRICS
 from core.models import AstronautProfile, Baseline
@@ -87,7 +88,8 @@ class SleepDeclineScenarioTests(TestCase):
         active = list(Alert.objects.filter(acknowledged=False).values_list('astronaut__email', 'metric', 'severity'))
         self.assertEqual(active, [('amara.reyes@mission.example', 'sleep', 'caution')])
         alert = Alert.objects.get(acknowledged=False)
-        self.assertIn('below baseline for 3 nights', alert.message)
+        self.assertEqual(alert.title, title_for('sleep', 'amber'))
+        self.assertEqual(alert.message, message_for('sleep', 'amber'))
         self.assertEqual(alert.mission_day, 142)
         self.assertFalse(Alert.objects.filter(title='Sleep is trending down').exists())
 
@@ -95,7 +97,8 @@ class SleepDeclineScenarioTests(TestCase):
         old = list(Alert.objects.filter(acknowledged=True))
         self.assertEqual(len(old), 1)
         self.assertEqual((old[0].metric, old[0].severity, old[0].mission_day), ('resting_hr', 'caution', 130))
-        self.assertIn('above baseline for 3 days', old[0].message)
+        self.assertEqual(old[0].title, title_for('resting_hr', 'amber'))
+        self.assertEqual(old[0].message, message_for('resting_hr', 'amber'))
 
     def test_health_score_is_a_number(self):
         score = calculate_health_score(self.evals)
@@ -137,8 +140,18 @@ class SeedDemoOptionsTests(TestCase):
             call_command('seed_demo', scenario='not_a_scenario', verbosity=0)
         self.assertTrue(AstronautProfile.objects.filter(email="existing@mission.example").exists())
 
-    def test_plain_seed_demo_keeps_the_old_behaviour(self):
+    def test_plain_seed_demo_uses_science_lead_alert_texts(self):
         call_command('seed_demo', verbosity=0)
-        titles = set(Alert.objects.values_list('title', flat=True))
-        self.assertIn('Sleep is trending down', titles)
         self.assertEqual(Alert.objects.count(), 3)
+        sleep = Alert.objects.get(metric='sleep')
+        self.assertEqual(sleep.severity, 'caution')
+        self.assertEqual(sleep.title, title_for('sleep', 'caution'))
+        self.assertEqual(sleep.message, message_for('sleep', 'caution'))
+        hr = Alert.objects.get(metric='resting_hr')
+        self.assertEqual(hr.severity, 'caution')
+        self.assertEqual(hr.title, title_for('resting_hr', 'caution'))
+        self.assertEqual(hr.message, message_for('resting_hr', 'caution'))
+        # Nominal cabin CO2 has no Science Lead amber/red text; it stays a status signal.
+        co2 = Alert.objects.get(metric='cabin_co2')
+        self.assertEqual(co2.severity, 'nominal')
+        self.assertFalse(Alert.objects.filter(title='Sleep is trending down').exists())

@@ -83,7 +83,7 @@ def login_view(request):
     """
     Cosmic glassmorphic login view.
     Authenticates crew credentials and routes to the requested path.
-    This view and logout_view are the only ones that do not need a login.
+    This view, logout_view and sources_view do not need a login.
     """
     next_url = request.GET.get('next') or request.POST.get('next') or reverse('core:dashboard')
     # Only follow ?next= to a page on this site.
@@ -153,7 +153,7 @@ def logout_view(request):
     return redirect('core:login')
 
 
-def companion_answers_for(astronaut, metric_evals, health_score):
+def companion_answers_for(astronaut, metric_evals, health_score, user=None):
     """The companion's answers for one astronaut.
 
     This is the one place that gathers the numbers from the database and hands them
@@ -170,7 +170,7 @@ def companion_answers_for(astronaut, metric_evals, health_score):
     open_alerts = Alert.objects.filter(astronaut=astronaut, acknowledged=False).count()
     answers = build_companion_answers(metric_evals, health_score, source_counts, open_alerts)
     if settings.COMPANION_LLM_ENABLED:
-        answers = rephrase_with_llm(answers)
+        answers = rephrase_with_llm(answers, user=user)
     return answers
 
 
@@ -187,10 +187,10 @@ def companion_answers_view(request):
 
     metric_evals = evaluate_astronaut_metrics(astronaut)
     health_score = calculate_health_score(metric_evals)
-    return JsonResponse({'answers': companion_answers_for(astronaut, metric_evals, health_score)})
+    return JsonResponse({'answers': companion_answers_for(astronaut, metric_evals, health_score, user=request.user)})
 
 
-def _ask_pulse_answer(intent_id, astronaut):
+def _ask_pulse_answer(intent_id, astronaut, user=None):
     """The computed companion answer for one intent id, or None if there is none.
 
     Always built by core/companion.py from the astronaut's own computed results.
@@ -198,7 +198,7 @@ def _ask_pulse_answer(intent_id, astronaut):
     """
     metric_evals = evaluate_astronaut_metrics(astronaut)
     health_score = calculate_health_score(metric_evals)
-    answers = companion_answers_for(astronaut, metric_evals, health_score)
+    answers = companion_answers_for(astronaut, metric_evals, health_score, user=user)
 
     wanted = intent_id if intent_id in ('overall', 'what_to_do', 'data_source') else f'why_{intent_id}'
     for answer in answers:
@@ -210,7 +210,7 @@ def _ask_pulse_answer(intent_id, astronaut):
         simulated_note = answers[0].get('simulated_note', '') if answers else ''
         answer = indicator_answer(intent_id, metric_evals[intent_id], simulated_note)
         if settings.COMPANION_LLM_ENABLED:
-            answer = rephrase_with_llm([answer])[0]
+            answer = rephrase_with_llm([answer], user=user)[0]
         return answer
     return None
 
@@ -239,7 +239,7 @@ def _space_weather_view_data():
         return None, None
 
 
-def _space_weather_answer():
+def _space_weather_answer(user=None):
     """The Ask Pulse answer for radiation / space weather, or None when there is no data.
 
     Built only from the stored DONKI summary (core/donki.py); the AI may only reword it.
@@ -253,7 +253,7 @@ def _space_weather_answer():
         logger.warning('Space weather answer skipped: %s', type(exc).__name__)
         return None
     if settings.COMPANION_LLM_ENABLED:
-        answer = rephrase_with_llm([answer])[0]
+        answer = rephrase_with_llm([answer], user=user)[0]
     return answer
 
 
@@ -274,6 +274,25 @@ def space_weather_view(request):
         'fetched_at': view['fetched_at'].isoformat(),
         'summary': view['summary'],
         'display': display,
+    })
+
+
+
+@login_not_required
+@require_GET
+def sources_view(request):
+    """Public data-provenance page: where every data point comes from.
+
+    Login is not required so judges can read it without a demo account.
+    It only reads already-stored SpaceWeatherSnapshot rows; it never calls NASA.
+    """
+    from core.models import SpaceWeatherSnapshot
+    from core.sources import page_catalog
+
+    snapshot = SpaceWeatherSnapshot.objects.first()
+    return render(request, 'core/sources.html', {
+        'active_nav': 'sources',
+        'catalog': page_catalog(snapshot),
     })
 
 
@@ -314,12 +333,12 @@ def companion_ask_view(request):
         if get_space_weather(allow_refresh=False):
             allowed_ids = (*allowed_ids, 'radiation')
             descriptions = {**descriptions, 'radiation': intent.RADIATION_INTENT_DESCRIPTION}
-        picked = classify_intent_with_llm(question, allowed_ids, descriptions)
+        picked = classify_intent_with_llm(question, allowed_ids, descriptions, user=request.user)
         if picked:
             intent_id, method = picked[0], intent.AI
 
     if intent_id == 'radiation':
-        answer = _space_weather_answer()
+        answer = _space_weather_answer(user=request.user)
         if answer is None:
             logger.debug('ask_pulse intent=radiation method=%s no data', method)
             return _ask_pulse_out_of_scope(intent.KEYWORD, intent.NO_RADIATION_DATA_NOTE)
@@ -327,7 +346,7 @@ def companion_ask_view(request):
         if intent_id is None:
             logger.debug('ask_pulse intent=none')
             return _ask_pulse_out_of_scope(intent.NONE)
-        answer = _ask_pulse_answer(intent_id, astronaut)
+        answer = _ask_pulse_answer(intent_id, astronaut, user=request.user)
         if answer is None:
             return _ask_pulse_out_of_scope(intent.NONE)
     logger.debug('ask_pulse intent=%s method=%s', intent_id, method)
@@ -473,7 +492,7 @@ def dashboard_view(request):
     sleep_caution_low = amber_edges('sleep', sleep_baseline)['low']
 
     # Companion panel. Chips are plain links (?ask=<id>), so they work without JavaScript.
-    companion_answers = companion_answers_for(astronaut, metric_evals, health_score)
+    companion_answers = companion_answers_for(astronaut, metric_evals, health_score, user=request.user)
     selected_id = request.GET.get('ask')
     if selected_id not in [answer['id'] for answer in companion_answers]:
         selected_id = 'overall'

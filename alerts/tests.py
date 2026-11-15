@@ -48,6 +48,16 @@ class AlertsTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, "Diagnostic Pod")
         self.assertContains(resp, "What to do")
+        self.assertContains(resp, "Sleep (7 Days)")
+        self.assertContains(resp, "Caution below 6.2")
+        self.assertNotContains(resp, "REM Cycle")
+        self.assertNotContains(resp, "-20.5%")
+        self.assertNotContains(resp, "Amber Range")
+        self.assertNotContains(resp, "AUTOCORR")
+        self.assertNotContains(resp, "Cognitive Risk Index")
+        self.assertNotContains(resp, "Day 139")
+        self.assertContains(resp, f"Raised Day {self.alert.mission_day}")
+        self.assertContains(resp, self.alert.timestamp.strftime('%H:%M'))
 
     def test_acknowledge_alert(self):
         resp = self.client.post(reverse('alerts:acknowledge', args=[self.alert.id]))

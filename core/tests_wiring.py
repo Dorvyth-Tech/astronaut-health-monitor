@@ -15,6 +15,7 @@ from django.test import SimpleTestCase, TestCase
 from core import rules
 from core.constants import EXERCISE_WEEKLY_PLAN_MINUTES
 from core.models import AstronautProfile, Baseline
+from core.alert_texts import message_for, title_for
 from core.services import (
     STATUS_TO_SEVERITY,
     SEVERITY_TO_STATUS,
@@ -225,7 +226,7 @@ class AmberEdgeTests(SimpleTestCase):
         self.assertEqual(amber_edges('hrv', 50.0), {'low': 42.5, 'high': None})
         self.assertEqual(amber_edges('body_temp', 36.7), {'low': None, 'high': 37.2})
         self.assertEqual(amber_edges('cabin_co2', 2450.0), {'low': None, 'high': 3500.0})
-        self.assertEqual(amber_edges('mood', 4.0), {'low': 3.5, 'high': None})
+        self.assertEqual(amber_edges('mood', 4.0), {'low': 3.0, 'high': None})
 
     def test_exercise_edge_is_90_percent_of_the_150_minute_plan_per_day(self):
         # 150 / 7 * 0.9 = 19.29 min per day, whatever the stored baseline is
@@ -259,7 +260,8 @@ class DatabaseWiringTests(TestCase):
         sync_alerts_for_astronaut(self.astro)
         alert = Alert.objects.get(astronaut=self.astro, metric='sleep')
         self.assertEqual(alert.severity, 'caution')
-        self.assertIn('below baseline for 3 nights', alert.message)
+        self.assertEqual(alert.title, title_for('sleep', 'amber'))
+        self.assertEqual(alert.message, message_for('sleep', 'amber'))
 
     def test_sync_twice_does_not_duplicate_an_active_alert(self):
         self.add_sleep([6.0, 5.9, 5.8])
@@ -320,9 +322,8 @@ class DatabaseWiringTests(TestCase):
         sync_alerts_for_astronaut(self.astro)
         alert = Alert.objects.get(astronaut=self.astro, metric='mood')
         self.assertEqual(alert.severity, 'caution')
-        self.assertEqual(alert.title, 'Mood caution')
-        self.assertIn('Mood 1.3 points below baseline for 3 days', alert.message)
-        self.assertIn('Your baseline is 4.3 /5', alert.message)
+        self.assertEqual(alert.title, title_for('mood', 'amber'))
+        self.assertEqual(alert.message, message_for('mood', 'amber'))
 
     def test_mood_alert_is_not_duplicated_while_unacknowledged(self):
         Baseline.objects.create(astronaut=self.astro, metric='mood', baseline_value=4.3)

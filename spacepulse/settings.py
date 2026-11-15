@@ -35,6 +35,12 @@ DEMO_MODE = config('DEMO_MODE', default=False, cast=bool)
 # suite never touches the network. Keys and provider: see .env.example.
 COMPANION_LLM_ENABLED = config('COMPANION_LLM_ENABLED', default=False, cast=bool) and 'test' not in sys.argv
 
+# Per-user cap on live LLM calls (core/llm.py). Cache hits do not count.
+# Anonymous callers never hit the model. Over the limit, the rule-based
+# answers are used. Tests can override these with override_settings.
+COMPANION_LLM_RATE_LIMIT = config('COMPANION_LLM_RATE_LIMIT', default=20, cast=int)
+COMPANION_LLM_RATE_WINDOW = config('COMPANION_LLM_RATE_WINDOW', default=3600, cast=int)
+
 # Space-weather card (core/donki.py, NASA DONKI). When True the dashboard may make ONE bounded
 # refresh call (5 s timeout) if its data is more than 30 minutes old; otherwise it only reads the
 # cache and the last stored snapshot. Always off while running tests (no network in tests).
@@ -56,6 +62,7 @@ INSTALLED_APPS = [
     'telemetry',
     'alerts',
     'environment',
+    'companion',     # Pulse chat: conversations, messages, memories
 ]
 
 MIDDLEWARE = [

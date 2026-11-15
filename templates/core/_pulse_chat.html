@@ -1,0 +1,484 @@
+{# Pulse chat panel (included by dashboard.html under the Pulse Companion section). Messages are built in the browser with textContent only. #}
+<style>
+  /* Pulse avatar: original hand-drawn SVG, state classes set by the chat script. */
+  .pulse-avatar { width: 56px; height: 56px; flex: none; }
+  .pulse-avatar .pa-head { fill: #1b2a38; stroke: #7fd8e6; stroke-width: 2; }
+  .pulse-avatar .pa-visor { fill: #07131c; stroke: #00f0ff; stroke-width: 1.5; }
+  .pulse-avatar .pa-eye { fill: #00f0ff; transform-box: fill-box; transform-origin: center; }
+  .pulse-avatar .pa-antenna { stroke: #7fd8e6; stroke-width: 2; stroke-linecap: round; }
+  .pulse-avatar .pa-bulb { fill: #00f0ff; }
+  .pulse-avatar .pa-body { fill: #1b2a38; stroke: #7fd8e6; stroke-width: 2; }
+  .pulse-avatar .pa-wave { fill: none; stroke: #00f0ff; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .pulse-avatar--idle .pa-bulb { animation: pa-glow 3.2s ease-in-out infinite; }
+  .pulse-avatar--thinking .pa-eye { animation: pa-blink 0.9s ease-in-out infinite; }
+  .pulse-avatar--thinking .pa-bulb { animation: pa-glow 0.7s ease-in-out infinite; }
+  .pulse-avatar--responding .pa-wave { stroke-dasharray: 40; animation: pa-wave 1.2s linear infinite; }
+  .pulse-avatar--concern .pa-visor { stroke: #FFB020; }
+  .pulse-avatar--concern .pa-eye, .pulse-avatar--concern .pa-bulb, .pulse-avatar--concern .pa-wave { fill: #FFB020; stroke: #FFB020; }
+  .pulse-avatar--concern .pa-wave { fill: none; }
+  .pulse-avatar--emergency .pa-visor { stroke: #ffb4ab; animation: pa-alarm 0.8s ease-in-out infinite; }
+  .pulse-avatar--emergency .pa-eye, .pulse-avatar--emergency .pa-bulb { fill: #ffb4ab; }
+  .pulse-avatar--emergency .pa-wave { stroke: #ffb4ab; }
+  @keyframes pa-glow { 0%, 100% { opacity: 0.45; } 50% { opacity: 1; } }
+  @keyframes pa-blink { 0%, 100% { transform: scaleY(1); } 50% { transform: scaleY(0.15); } }
+  @keyframes pa-wave { to { stroke-dashoffset: -80; } }
+  @keyframes pa-alarm { 0%, 100% { fill: #07131c; } 50% { fill: #4a1410; } }
+  @media (prefers-reduced-motion: reduce) { .pulse-avatar * { animation: none !important; } }
+</style>
+
+<section id="pulse-chat" aria-labelledby="pulse-chat-title"
+         data-history-url="{% url 'companion:history' %}"
+         data-send-url="{% url 'companion:send' %}"
+         data-new-url="{% url 'companion:new' %}"
+         data-memories-url="{% url 'companion:memories' %}"
+         data-memory-add-url="{% url 'companion:memory_add' %}"
+         data-memory-delete-url="{% url 'companion:memory_delete' 0 %}"
+         class="w-full p-space-lg rounded-xl bg-surface-container/70 backdrop-blur-md shadow-xl flex flex-col gap-space-md border border-white/5">
+  {% csrf_token %}
+  <div class="flex items-center justify-between gap-space-md flex-wrap">
+    <div class="flex items-center gap-space-sm">
+      <svg id="pulse-avatar" class="pulse-avatar pulse-avatar--idle" viewBox="0 0 64 64" role="img" aria-label="Pulse, the companion avatar">
+        <line class="pa-antenna" x1="32" y1="14" x2="32" y2="7"/>
+        <circle class="pa-bulb" cx="32" cy="5" r="3"/>
+        <rect class="pa-head" x="9" y="14" width="46" height="31" rx="13"/>
+        <rect class="pa-visor" x="15" y="20" width="34" height="19" rx="8"/>
+        <rect class="pa-eye" x="23" y="25" width="4" height="9" rx="2"/>
+        <rect class="pa-eye" x="37" y="25" width="4" height="9" rx="2"/>
+        <rect class="pa-body" x="17" y="48" width="30" height="12" rx="6"/>
+        <path class="pa-wave" d="M21 54 h5 l2 -4 l4 8 l2 -4 h9"/>
+      </svg>
+      <div class="flex flex-col">
+        <h2 id="pulse-chat-title" class="font-headline-sm text-headline-sm text-on-surface font-semibold">Chat with Pulse</h2>
+        <p class="font-body-sm text-body-sm text-on-surface-variant">Pulse is an AI companion. Not a medical device; does not diagnose.</p>
+      </div>
+    </div>
+    <button id="pulse-new" type="button"
+            class="px-space-md py-space-xs rounded-full font-body-sm text-body-sm transition-all border bg-surface-container-high text-on-surface-variant border-white/5 hover:bg-surface-bright focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-container">
+      New conversation
+    </button>
+  </div>
+
+  <div id="pulse-chips" class="flex flex-wrap gap-space-sm" role="group" aria-label="Suggested prompts">
+    <button type="button" data-pulse-prompt="How am I doing?" class="px-space-md py-space-xs rounded-full font-body-sm text-body-sm transition-all border bg-surface-container-high text-on-surface-variant border-white/5 hover:bg-surface-bright focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-container">How am I doing?</button>
+    <button type="button" data-pulse-prompt="Explain my sleep trend" class="px-space-md py-space-xs rounded-full font-body-sm text-body-sm transition-all border bg-surface-container-high text-on-surface-variant border-white/5 hover:bg-surface-bright focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-container">Explain my sleep trend</button>
+    <button type="button" data-pulse-prompt="Review the cabin environment" class="px-space-md py-space-xs rounded-full font-body-sm text-body-sm transition-all border bg-surface-container-high text-on-surface-variant border-white/5 hover:bg-surface-bright focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-container">Review the cabin environment</button>
+    <button type="button" data-pulse-prompt="Start a check-in" class="px-space-md py-space-xs rounded-full font-body-sm text-body-sm transition-all border bg-surface-container-high text-on-surface-variant border-white/5 hover:bg-surface-bright focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-container">Start a check-in</button>
+  </div>
+
+  <div class="flex flex-col gap-space-sm">
+    <p id="pulse-empty" class="hidden font-body-md text-body-md text-on-surface-variant p-space-md rounded-xl bg-surface-container-high/60 border border-white/5">
+      Say hello or pick a prompt above. I can go over your indicators, the cabin environment, or just keep you company. I'm an AI, so for anything urgent please contact your flight surgeon.
+    </p>
+    <div id="pulse-messages" role="log" aria-live="polite" aria-relevant="additions" aria-label="Conversation with Pulse"
+         class="flex flex-col gap-space-sm max-h-[420px] overflow-y-auto pr-space-xs" tabindex="0"></div>
+    <p id="pulse-thinking" role="status" class="hidden font-body-sm text-body-sm text-on-surface-variant pl-space-xs">Pulse is thinking…</p>
+    <p id="pulse-error" role="alert" class="hidden font-body-sm text-body-sm text-error p-space-sm rounded-xl bg-surface-container-high/60 border border-error/40"></p>
+  </div>
+
+  <form id="pulse-form" class="flex flex-col sm:flex-row gap-space-sm" novalidate>
+    <label for="pulse-input" class="sr-only">Message Pulse</label>
+    <input id="pulse-input" type="text" maxlength="300" autocomplete="off"
+           placeholder="Message Pulse, or say &quot;remember that ...&quot;"
+           class="flex-1 px-space-md py-space-xs rounded-full font-body-sm text-body-sm bg-surface-container-high text-on-surface placeholder:text-outline border border-white/5 focus:outline-none focus:border-primary-container/40">
+    <button id="pulse-mic" type="button" hidden aria-pressed="false" aria-label="Talk to Pulse by voice"
+            class="px-space-md py-space-xs rounded-full font-body-sm text-body-sm transition-all border bg-surface-container-high text-on-surface-variant border-white/5 hover:bg-surface-bright focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-container disabled:opacity-50">
+      <span id="pulse-mic-label">Talk</span>
+    </button>
+    <button id="pulse-send" type="submit"
+            class="px-space-md py-space-xs rounded-full font-body-sm text-body-sm transition-all border bg-primary-container/10 text-primary-container border-primary-container/40 hover:bg-primary-container/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-container disabled:opacity-50">
+      Send
+    </button>
+  </form>
+
+  <div id="pulse-voice" hidden class="flex flex-col gap-space-xs">
+    <label id="pulse-speak-label" class="flex items-center gap-space-xs font-body-sm text-body-sm text-on-surface-variant">
+      <input id="pulse-speak" type="checkbox">
+      Speak Pulse's replies aloud
+    </label>
+    <p id="pulse-voice-status" role="status" aria-live="polite" class="font-body-sm text-body-sm text-on-surface-variant"></p>
+    <p class="font-label-sm text-label-sm text-on-surface-variant">Voice is optional and uses your browser's own speech features. In Chrome and Edge, what you say is sent to the browser maker's speech service to be turned into text. Pulse never receives or keeps audio: only the text is sent, like a typed message. Replies are read aloud on your device.</p>
+  </div>
+
+  <div class="flex flex-col gap-space-xs p-space-md rounded-xl bg-surface-container-high/60 border border-white/5">
+    <h3 id="pulse-memory-title" class="font-headline-sm text-headline-sm text-on-surface font-semibold">What Pulse remembers</h3>
+    <p class="font-body-sm text-body-sm text-on-surface-variant">Only what you ask me to keep. It's your own words, and you can delete any of it.</p>
+    <p id="pulse-memory-empty" class="hidden font-body-sm text-body-sm text-on-surface-variant">Nothing saved yet.</p>
+    <ul id="pulse-memory-list" aria-labelledby="pulse-memory-title" class="flex flex-col gap-space-xs"></ul>
+    <form id="pulse-memory-form" class="flex flex-col sm:flex-row gap-space-sm" novalidate>
+      <label for="pulse-memory-input" class="sr-only">Ask Pulse to remember a note</label>
+      <input id="pulse-memory-input" type="text" maxlength="200" autocomplete="off" placeholder="Ask Pulse to remember something"
+             class="flex-1 px-space-md py-space-xs rounded-full font-body-sm text-body-sm bg-surface-container-high text-on-surface placeholder:text-outline border border-white/5 focus:outline-none focus:border-primary-container/40">
+      <button type="submit"
+              class="px-space-md py-space-xs rounded-full font-body-sm text-body-sm transition-all border bg-surface-container-high text-on-surface-variant border-white/5 hover:bg-surface-bright focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-container">
+        Remember
+      </button>
+    </form>
+    <p id="pulse-memory-error" role="alert" class="hidden font-body-sm text-body-sm text-error"></p>
+  </div>
+</section>
+
+<script>
+  // Pulse chat. Everything from the server or the user is put on the page with textContent only.
+  (function () {
+    var root = document.getElementById('pulse-chat');
+    if (!root) { return; }
+    var tokenField = root.querySelector('[name=csrfmiddlewaretoken]');
+    var token = tokenField ? tokenField.value : '';
+    var list = document.getElementById('pulse-messages');
+    var emptyBox = document.getElementById('pulse-empty');
+    var thinking = document.getElementById('pulse-thinking');
+    var errorBox = document.getElementById('pulse-error');
+    var form = document.getElementById('pulse-form');
+    var input = document.getElementById('pulse-input');
+    var sendButton = document.getElementById('pulse-send');
+    var avatar = document.getElementById('pulse-avatar');
+    var memoryList = document.getElementById('pulse-memory-list');
+    var memoryEmpty = document.getElementById('pulse-memory-empty');
+    var memoryForm = document.getElementById('pulse-memory-form');
+    var memoryInput = document.getElementById('pulse-memory-input');
+    var memoryError = document.getElementById('pulse-memory-error');
+    var conversationId = null;
+    var busy = false;
+    var idleTimer = null;
+    var voice = { afterReply: function () {}, stop: function () {} };
+    var barColors = { caution: 'bg-[#FFB020]', critical: 'bg-error', nominal: 'bg-[#22E3A0]', no_data: 'bg-outline' };
+
+    function setState(state) {
+      avatar.setAttribute('class', 'pulse-avatar pulse-avatar--' + state);
+      clearTimeout(idleTimer);
+      if (state === 'responding' || state === 'concern') {
+        idleTimer = setTimeout(function () { setState('idle'); }, 6000);
+      }
+    }
+
+    function el(parent, tag, classes, text) {
+      var node = document.createElement(tag);
+      node.className = classes;
+      if (text) { node.textContent = text; }
+      parent.appendChild(node);
+      return node;
+    }
+
+    function api(url, method, body) {
+      var options = { method: method, credentials: 'same-origin', headers: { 'X-CSRFToken': token } };
+      if (body !== undefined) {
+        options.headers['Content-Type'] = 'application/json';
+        options.body = JSON.stringify(body);
+      }
+      return fetch(url, options).then(function (response) {
+        return response.json().then(function (data) {
+          return { ok: response.ok, status: response.status, data: data };
+        }, function () {
+          return { ok: false, status: response.status, data: { error: 'Something went wrong. Please sign in again and retry.' } };
+        });
+      });
+    }
+
+    function showError(text) {
+      errorBox.textContent = text;
+      errorBox.classList.remove('hidden');
+    }
+    function clearError() {
+      errorBox.textContent = '';
+      errorBox.classList.add('hidden');
+    }
+    function updateEmpty() {
+      emptyBox.classList.toggle('hidden', list.children.length > 0);
+    }
+
+    function addMessage(m) {
+      var row = el(list, 'div', m.role === 'user' ? 'flex justify-end' : 'flex justify-start', '');
+      var bubble = el(row, 'div', m.role === 'user'
+        ? 'max-w-[85%] p-space-md rounded-xl bg-primary-container/10 border border-primary-container/30 flex flex-col gap-space-xs'
+        : 'max-w-[92%] p-space-md rounded-xl bg-surface-container-high/60 relative overflow-hidden flex flex-col gap-space-xs shadow-md border border-white/5', '');
+      if (m.role === 'user') {
+        el(bubble, 'p', 'font-body-md text-body-md text-on-surface', m.text).style.whiteSpace = 'pre-wrap';
+        return;
+      }
+      var bar = el(bubble, 'div', 'absolute left-0 top-0 bottom-0 w-1 ' + (barColors[m.severity] || 'bg-outline'), '');
+      bar.setAttribute('aria-hidden', 'true');
+      el(bubble, 'span', 'sr-only', 'Pulse says:');
+      el(bubble, 'p', 'font-body-md text-body-md text-on-surface pl-space-xs', m.text).style.whiteSpace = 'pre-wrap';
+      if (m.escalation) { el(bubble, 'p', 'font-headline-sm text-headline-sm text-error font-semibold pl-space-xs', m.escalation); }
+      if (m.details) { el(bubble, 'p', 'font-body-sm text-body-sm text-on-surface-variant pl-space-xs', m.details); }
+      (m.links || []).forEach(function (link) {
+        if (typeof link.url !== 'string' || link.url.charAt(0) !== '/') { return; }
+        var a = el(bubble, 'a', 'self-start ml-space-xs px-space-md py-space-xs rounded-full font-body-sm text-body-sm border bg-primary-container/10 text-primary-container border-primary-container/40 hover:bg-primary-container/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-container', link.label);
+        a.setAttribute('href', link.url);
+      });
+      if (m.source) {
+        var src = el(bubble, 'p', 'font-body-sm text-body-sm text-on-surface-variant pl-space-xs', '');
+        el(src, 'span', 'text-outline', 'Source: ');
+        src.appendChild(document.createTextNode(m.source));
+      }
+      if (m.simulated_note) { el(bubble, 'p', 'font-body-sm text-body-sm text-[#FFB020] pl-space-xs', m.simulated_note); }
+      if (m.data_note) { el(bubble, 'p', 'font-body-sm text-body-sm text-[#FFB020] pl-space-xs', m.data_note); }
+      if (m.context) { el(bubble, 'p', 'font-body-sm text-body-sm text-on-surface-variant pl-space-xs', m.context); }
+      if (m.ai_label) { el(bubble, 'p', 'font-label-sm text-label-sm text-on-surface-variant pl-space-xs', m.ai_label); }
+      if (m.disclaimer && m.kind !== 'smalltalk' && m.kind !== 'memory') { el(bubble, 'p', 'font-label-sm text-label-sm text-on-surface-variant pl-space-xs', m.disclaimer); }
+    }
+
+    function scrollDown() { list.scrollTop = list.scrollHeight; }
+
+    function setBusy(on) {
+      busy = on;
+      sendButton.disabled = on;
+      input.disabled = on;
+      thinking.classList.toggle('hidden', !on);
+      root.querySelectorAll('[data-pulse-prompt]').forEach(function (chip) { chip.disabled = on; });
+      if (on) { setState('thinking'); }
+    }
+
+    function loadHistory() {
+      return api(root.dataset.historyUrl, 'GET').then(function (res) {
+        if (!res.ok) { showError((res.data && res.data.error) || 'I could not load the conversation.'); return; }
+        clearError();
+        conversationId = res.data.conversation_id;
+        list.textContent = '';
+        res.data.messages.forEach(addMessage);
+        updateEmpty();
+        scrollDown();
+      }, function () { showError('I could not reach the server. Check your connection and try again.'); });
+    }
+
+    function send(text, viaVoice) {
+      if (busy) { return; }
+      clearError();
+      var body = { message: text };
+      if (conversationId) { body.conversation_id = conversationId; }
+      addMessage({ role: 'user', text: text });
+      updateEmpty();
+      scrollDown();
+      setBusy(true);
+      api(root.dataset.sendUrl, 'POST', body).then(function (res) {
+        setBusy(false);
+        if (!res.ok) {
+          setState('idle');
+          showError((res.data && res.data.error) || 'Pulse could not answer just now. Please try again.');
+          list.removeChild(list.lastChild);
+          updateEmpty();
+          input.value = text;
+          input.focus();
+          return;
+        }
+        conversationId = res.data.conversation_id;
+        addMessage(res.data.reply);
+        scrollDown();
+        setState(res.data.reply.state || 'responding');
+        if (res.data.memory) { loadMemories(); }
+        voice.afterReply(res.data.reply, !!viaVoice);
+        input.focus();
+      }, function () {
+        setBusy(false);
+        setState('idle');
+        showError('I could not reach the server. Check your connection and try again.');
+        list.removeChild(list.lastChild);
+        updateEmpty();
+        input.value = text;
+        input.focus();
+      });
+    }
+
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      var text = input.value.trim();
+      if (!text) { showError('Type a message first.'); return; }
+      if (text.length > 300) { showError('Please keep your message under 300 characters.'); return; }
+      input.value = '';
+      send(text);
+    });
+
+    root.querySelectorAll('[data-pulse-prompt]').forEach(function (chip) {
+      chip.addEventListener('click', function () { send(chip.dataset.pulsePrompt); });
+    });
+
+    document.getElementById('pulse-new').addEventListener('click', function () {
+      if (busy) { return; }
+      clearError();
+      api(root.dataset.newUrl, 'POST').then(function (res) {
+        if (!res.ok) { showError((res.data && res.data.error) || 'I could not start a new conversation.'); return; }
+        conversationId = res.data.conversation_id;
+        list.textContent = '';
+        updateEmpty();
+        voice.stop();
+        setState('idle');
+        input.focus();
+      }, function () { showError('I could not reach the server. Check your connection and try again.'); });
+    });
+
+    // --- What Pulse remembers ---
+    function renderMemories(memories) {
+      memoryList.textContent = '';
+      memories.forEach(function (memory) {
+        var item = el(memoryList, 'li', 'flex items-center justify-between gap-space-sm p-space-xs rounded-lg bg-surface-container/70 border border-white/5', '');
+        el(item, 'span', 'font-body-sm text-body-sm text-on-surface', memory.text);
+        var del = el(item, 'button', 'px-space-sm py-0.5 rounded-full font-body-sm text-body-sm border bg-surface-container-high text-on-surface-variant border-white/5 hover:bg-surface-bright focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-container', 'Delete');
+        del.type = 'button';
+        del.setAttribute('aria-label', 'Delete memory: ' + memory.text);
+        del.addEventListener('click', function () {
+          api(root.dataset.memoryDeleteUrl.replace(/0\/delete\/$/, memory.id + '/delete/'), 'POST').then(function (res) {
+            if (res.ok) { loadMemories(); input.focus(); } else { memoryError.textContent = (res.data && res.data.error) || 'I could not delete that.'; memoryError.classList.remove('hidden'); }
+          });
+        });
+      });
+      memoryEmpty.classList.toggle('hidden', memories.length > 0);
+    }
+
+    function loadMemories() {
+      memoryError.classList.add('hidden');
+      return api(root.dataset.memoriesUrl, 'GET').then(function (res) {
+        if (res.ok) { renderMemories(res.data.memories); }
+      }, function () {});
+    }
+
+    memoryForm.addEventListener('submit', function (event) {
+      event.preventDefault();
+      var text = memoryInput.value.trim();
+      if (!text) { memoryError.textContent = 'Type what you want me to remember.'; memoryError.classList.remove('hidden'); return; }
+      api(root.dataset.memoryAddUrl, 'POST', { text: text }).then(function (res) {
+        if (res.ok) { memoryInput.value = ''; loadMemories(); }
+        else { memoryError.textContent = (res.data && res.data.error) || 'I could not save that.'; memoryError.classList.remove('hidden'); }
+      }, function () { memoryError.textContent = 'I could not reach the server.'; memoryError.classList.remove('hidden'); });
+    });
+
+
+    // --- Voice: the browser's own speech features only. No audio reaches SPACE-PULSE; only the
+    // transcribed text is sent, through the same send() as a typed message. Hidden when unsupported.
+    voice = (function () {
+      var Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      var synth = window.speechSynthesis;
+      var micButton = document.getElementById('pulse-mic');
+      var micLabel = document.getElementById('pulse-mic-label');
+      var voiceBox = document.getElementById('pulse-voice');
+      var speakBox = document.getElementById('pulse-speak');
+      var speakLabel = document.getElementById('pulse-speak-label');
+      var status = document.getElementById('pulse-voice-status');
+      var idleClass = micButton.className;
+      var activeClass = 'px-space-md py-space-xs rounded-full font-body-sm text-body-sm transition-all border bg-primary-container/10 text-primary-container border-primary-container/40 hover:bg-primary-container/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-container disabled:opacity-50';
+      var noop = { afterReply: function () {}, stop: function () {} };
+      if (!Recognition && !synth) { return noop; }
+      voiceBox.hidden = false;
+      var lang = document.documentElement.lang || navigator.language || 'en-US';
+      var recognizer = null;
+      var listening = false;
+      var conversation = false;
+
+      function setStatus(text) { status.textContent = text; }
+      function setMic(on) {
+        listening = on;
+        micButton.setAttribute('aria-pressed', on ? 'true' : 'false');
+        micButton.className = on ? activeClass : idleClass;
+        micLabel.textContent = on ? 'Stop' : 'Talk';
+      }
+      function speakOn() { return !!synth && speakBox.checked; }
+
+      if (synth) {
+        try { speakBox.checked = window.localStorage.getItem('pulseSpeak') === '1'; } catch (e) {}
+        speakBox.addEventListener('change', function () {
+          try { window.localStorage.setItem('pulseSpeak', speakBox.checked ? '1' : '0'); } catch (e) {}
+          if (!speakBox.checked) { synth.cancel(); }
+        });
+      } else {
+        speakLabel.hidden = true;
+      }
+
+      function listen() {
+        if (!Recognition || listening || busy) { return; }
+        if (synth) { synth.cancel(); }
+        clearError();
+        var finalText = '';
+        var cancelled = false;
+        var note = '';
+        recognizer = new Recognition();
+        recognizer.lang = lang;
+        recognizer.interimResults = true;
+        recognizer.continuous = false;
+        recognizer.maxAlternatives = 1;
+        recognizer.onresult = function (event) {
+          var interim = '';
+          for (var i = event.resultIndex; i < event.results.length; i++) {
+            if (event.results[i].isFinal) { finalText += event.results[i][0].transcript; }
+            else { interim += event.results[i][0].transcript; }
+          }
+          input.value = (finalText + interim).slice(0, 300);
+        };
+        recognizer.onerror = function (event) {
+          conversation = false;
+          if (event.error === 'aborted') { cancelled = true; return; }
+          if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+            showError('Microphone access is blocked. Allow it in your browser settings, or type instead.');
+          } else if (event.error === 'no-speech') {
+            note = 'I did not hear anything, so I stopped listening.';
+          } else if (event.error === 'network') {
+            showError('Voice input needs an internet connection in this browser. You can still type.');
+          } else {
+            showError('Voice input stopped. Try again, or type instead.');
+          }
+        };
+        recognizer.onend = function () {
+          recognizer = null;
+          setMic(false);
+          setStatus(note);
+          var text = finalText.trim().slice(0, 300);
+          if (cancelled || !text) { return; }
+          input.value = '';
+          send(text, true);
+        };
+        try {
+          recognizer.start();
+          setMic(true);
+          setStatus('Listening…');
+        } catch (e) {
+          recognizer = null;
+          setMic(false);
+        }
+      }
+
+      function stop() {
+        conversation = false;
+        if (recognizer) { recognizer.abort(); }
+        if (synth) { synth.cancel(); }
+      }
+
+      function speak(reply, viaVoice) {
+        // Read the reply and any escalation line, nothing else (sources and notes stay on screen).
+        var said = [reply.text, reply.escalation].filter(function (part) { return typeof part === 'string' && part.trim(); }).join(' ');
+        var parts = said.match(/[^.!?]+[.!?]*/g) || [];
+        synth.cancel();
+        if (!parts.length) { return; }
+        var urgent = reply.state === 'emergency' || !!reply.escalation;
+        if (urgent) { conversation = false; }
+        parts.forEach(function (part, index) {
+          var utterance = new SpeechSynthesisUtterance(part.trim());
+          utterance.lang = lang;
+          if (index === parts.length - 1) {
+            utterance.onend = function () {
+              if (viaVoice && conversation && !urgent) { listen(); }
+            };
+          }
+          synth.speak(utterance);
+        });
+      }
+
+      if (Recognition) {
+        micButton.hidden = false;
+        micButton.addEventListener('click', function () {
+          if (listening) { stop(); return; }
+          conversation = true;
+          listen();
+        });
+      }
+      window.addEventListener('pagehide', function () { stop(); });
+
+      return {
+        afterReply: function (reply, viaVoice) {
+          if (speakOn()) { speak(reply, viaVoice); } else { conversation = false; }
+        },
+        stop: stop
+      };
+    })();
+
+    loadHistory();
+    loadMemories();
+  })();
+</script>

@@ -357,7 +357,7 @@ def amber_edges(metric_key, baseline):
         # The chart shows minutes per day, the plan is per week: 90% of the plan, per day.
         edges['low'] = EXERCISE_WEEKLY_PLAN_MINUTES / 7 * 0.90
     elif metric_key == 'mood':
-        edges['low'] = baseline - 0.5          # more than 0.5 points below baseline
+        edges['low'] = baseline - 1.0          # drop of 1 point or more below baseline
     elif metric_key == 'resting_hr':
         edges['high'] = baseline * 1.10        # more than 10% above
     elif metric_key == 'body_temp':
@@ -667,6 +667,10 @@ def sync_alerts_for_astronaut(astronaut):
             .order_by('-mission_day', '-timestamp')
             .first()
         )
+        from core.alert_texts import message_for, title_for
+
+        science_title = title_for(metric, severity)
+        science_message = message_for(metric, severity)
         baseline = eval_res['baseline']
         baseline_text = f" Your baseline is {baseline:.1f} {eval_res['unit']}." if baseline is not None else ""
 
@@ -674,8 +678,8 @@ def sync_alerts_for_astronaut(astronaut):
             astronaut=astronaut,
             metric=metric,
             severity=severity,
-            title=f"{eval_res['display_label']} {severity}",
-            message=f"{eval_res['reason']}{baseline_text}",
+            title=science_title or f"{eval_res['display_label']} {severity}",
+            message=science_message or f"{eval_res['reason']}{baseline_text}",
             mission_day=latest_reading.mission_day,
             timestamp=latest_reading.timestamp,
             acknowledged=False,

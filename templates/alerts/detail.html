@@ -53,7 +53,7 @@
               {{ alert.title }}
             </h1>
             <p class="font-body-md text-body-md text-on-surface-variant">
-              Raised Day {{ alert.mission_day }} · 07:45 · Autonomous Diagnostics Engine
+              Raised Day {{ alert.mission_day }} · {{ alert.timestamp|date:'H:i' }} · Autonomous Diagnostics Engine
             </p>
           </div>
         </div>
@@ -65,7 +65,6 @@
               {{ variance_str }} <span class="font-body-sm text-body-sm text-on-surface-variant">vs BASE</span>
             </div>
           </div>
-          <span class="px-space-xs py-0.5 rounded bg-surface-container-high text-on-surface-variant font-label-sm text-label-sm">AUTOCORR: 0.88</span>
         </div>
       </div>
     </section>
@@ -83,25 +82,25 @@
               <span class="material-symbols-outlined text-primary-container text-[20px]">troubleshoot</span>
               <h2 class="font-headline-sm text-headline-sm text-on-surface tracking-wide uppercase">What changed</h2>
             </div>
-            <span class="font-label-caps text-label-caps text-outline uppercase">Day 139 - {{ alert.mission_day }}</span>
+            <span class="font-label-caps text-label-caps text-outline uppercase">Day {{ alert.mission_day }}</span>
           </div>
 
           <p class="font-body-lg text-body-lg text-on-surface-variant leading-relaxed">
-            {{ alert.message }} Today is in your <span class="text-[#FFB020] font-headline-sm">Amber range, 5.0–6.4 h</span>.
+            {% if alert_copy %}{{ alert_copy.what }}{% else %}{{ alert.message }}{% endif %}
           </p>
 
           <div class="mt-space-md grid grid-cols-3 gap-space-sm">
             <div class="p-space-sm rounded-lg bg-surface-container-high">
               <div class="font-label-caps text-label-caps text-outline uppercase">Latest Value</div>
-              <div class="font-headline-sm text-headline-sm text-on-surface">{{ latest_val }} {{ unit }}</div>
+              <div class="font-headline-sm text-headline-sm text-on-surface">{{ latest_str }}</div>
             </div>
             <div class="p-space-sm rounded-lg bg-surface-container-high">
               <div class="font-label-caps text-label-caps text-outline uppercase">4-Day Delta</div>
-              <div class="font-headline-sm text-headline-sm text-error">-20.5%</div>
+              <div class="font-headline-sm text-headline-sm {% if four_day_delta_str != 'No data' %}text-error{% else %}text-on-surface{% endif %}">{{ four_day_delta_str }}</div>
             </div>
             <div class="p-space-sm rounded-lg bg-surface-container-high">
-              <div class="font-label-caps text-label-caps text-outline uppercase">REM Cycle</div>
-              <div class="font-headline-sm text-headline-sm text-on-surface">61 min</div>
+              <div class="font-label-caps text-label-caps text-outline uppercase">Baseline</div>
+              <div class="font-headline-sm text-headline-sm text-on-surface">{% if has_baseline %}{{ baseline_val }} {{ unit }}{% else %}No data{% endif %}</div>
             </div>
           </div>
         </article>
@@ -113,10 +112,9 @@
               <span class="material-symbols-outlined text-secondary text-[20px]">psychology</span>
               <h2 class="font-headline-sm text-headline-sm text-on-surface tracking-wide uppercase">Why it matters</h2>
             </div>
-            <span class="font-label-caps text-label-caps text-primary-fixed uppercase">Cognitive Risk Index: Low</span>
           </div>
           <p class="font-body-lg text-body-lg text-on-surface-variant leading-relaxed">
-            Short sleep can reduce alertness and reaction time, and the effect builds over a long mission. Your <span class="text-on-surface font-headline-sm">HRV (62 ms)</span> and <span class="text-on-surface font-headline-sm">stress (3/10)</span> are still normal.
+            {% if alert_copy %}{{ alert_copy.why }}{% else %}{{ alert.message }}{% endif %}
           </p>
           <div class="mt-space-md p-space-sm rounded-lg bg-surface-container-low flex flex-col sm:flex-row gap-space-md sm:items-center justify-between border border-white/5">
             <div class="flex items-center gap-space-sm">
@@ -125,7 +123,7 @@
               </div>
               <div>
                 <div class="font-body-sm text-body-sm text-on-surface-variant">Heart Rate Variability</div>
-                <div class="font-headline-sm text-headline-sm text-on-surface">62 ms <span class="text-primary font-label-caps text-label-caps ml-1">NOMINAL</span></div>
+                <div class="font-headline-sm text-headline-sm text-on-surface">{% if related_hrv.has_data %}{{ related_hrv.value_str }} <span class="text-primary font-label-caps text-label-caps ml-1">{{ related_hrv.status_label|upper }}</span>{% else %}No data{% endif %}</div>
               </div>
             </div>
             <div class="flex items-center gap-space-sm">
@@ -133,8 +131,8 @@
                 <span class="material-symbols-outlined text-[18px]">self_improvement</span>
               </div>
               <div>
-                <div class="font-body-sm text-body-sm text-on-surface-variant">Neuro-Stress Score</div>
-                <div class="font-headline-sm text-headline-sm text-on-surface">3.0 <span class="text-on-surface-variant font-label-sm text-label-sm">/ 10</span></div>
+                <div class="font-body-sm text-body-sm text-on-surface-variant">Stress (self-report)</div>
+                <div class="font-headline-sm text-headline-sm text-on-surface">{% if related_stress.has_data %}{{ related_stress.value_str }} <span class="text-on-surface-variant font-label-sm text-label-sm">{{ related_stress.status_label }}</span>{% else %}No data{% endif %}</div>
               </div>
             </div>
           </div>
@@ -149,41 +147,18 @@
                 <legend class="font-headline-sm text-headline-sm text-on-surface tracking-wide uppercase">What to do</legend>
               </div>
               <span class="px-space-sm py-0.5 rounded-full bg-surface-container-high text-primary font-headline-sm text-body-sm" id="action-counter">
-                1 of 3 done
+                0 of 1 done
               </span>
             </div>
 
             <div class="flex flex-col gap-space-xs" id="checklist-group">
-              <!-- Item 1 -->
               <label class="group flex items-center gap-space-md min-h-[44px] p-space-sm rounded-lg bg-surface-container-low hover:bg-surface-container-high cursor-pointer transition-colors border border-white/5">
-                <input checked class="peer hidden" id="check-1" onchange="updateChecklistState()" type="checkbox"/>
-                <div class="w-6 h-6 rounded-lg bg-primary-container flex items-center justify-center text-on-primary-container shrink-0 peer-checked:bg-primary-container peer-[:not(:checked)]:bg-surface-container-high">
-                  <span class="material-symbols-outlined text-[18px] peer-checked:inline peer-[:not(:checked)]:hidden">check</span>
-                </div>
-                <span class="font-body-md text-body-md text-on-surface-variant group-hover:text-on-surface select-none peer-checked:line-through peer-checked:opacity-50">
-                  Dim cabin lights 60 minutes before your sleep period.
-                </span>
-              </label>
-
-              <!-- Item 2 -->
-              <label class="group flex items-center gap-space-md min-h-[44px] p-space-sm rounded-lg bg-surface-container-low hover:bg-surface-container-high cursor-pointer transition-colors border border-white/5">
-                <input class="peer hidden" id="check-2" onchange="updateChecklistState()" type="checkbox"/>
+                <input class="peer hidden" id="check-1" onchange="updateChecklistState()" type="checkbox"/>
                 <div class="w-6 h-6 rounded-lg bg-surface-container-high flex items-center justify-center text-on-primary-container shrink-0 peer-checked:bg-primary-container peer-[:not(:checked)]:bg-surface-container-high">
                   <span class="material-symbols-outlined text-[18px] hidden peer-checked:inline">check</span>
                 </div>
                 <span class="font-body-md text-body-md text-on-surface group-hover:text-primary select-none peer-checked:line-through peer-checked:opacity-50">
-                  Avoid caffeine in the 6 hours before sleep.
-                </span>
-              </label>
-
-              <!-- Item 3 -->
-              <label class="group flex items-center gap-space-md min-h-[44px] p-space-sm rounded-lg bg-surface-container-low hover:bg-surface-container-high cursor-pointer transition-colors border border-white/5">
-                <input class="peer hidden" id="check-3" onchange="updateChecklistState()" type="checkbox"/>
-                <div class="w-6 h-6 rounded-lg bg-surface-container-high flex items-center justify-center text-on-primary-container shrink-0 peer-checked:bg-primary-container peer-[:not(:checked)]:bg-surface-container-high">
-                  <span class="material-symbols-outlined text-[18px] hidden peer-checked:inline">check</span>
-                </div>
-                <span class="font-body-md text-body-md text-on-surface group-hover:text-primary select-none peer-checked:line-through peer-checked:opacity-50">
-                  Log your sleep again tomorrow morning.
+                  {% if alert_copy %}{{ alert_copy.action }}{% else %}Follow the action in this alert and log the result.{% endif %}
                 </span>
               </label>
             </div>
@@ -197,7 +172,7 @@
             <h2 class="font-headline-sm text-headline-sm text-on-surface tracking-wide uppercase">When to escalate</h2>
           </div>
           <p class="font-body-lg text-body-lg text-on-surface-variant leading-relaxed">
-            Contact ground support if sleep stays below <span class="text-error font-headline-sm">5.0 h for 2 nights</span>, or if you notice persistent headache, confusion or dizziness.
+            {% if alert_copy %}{{ alert_copy.escalate }}{% else %}Contact the flight surgeon if this continues.{% endif %}
           </p>
           <div class="pt-space-xs">
             <button class="w-full sm:w-auto inline-flex items-center justify-center gap-space-sm px-space-lg py-space-md rounded-xl font-headline-sm text-headline-sm text-[#0A0E1A] bg-gradient-to-r from-[#FF6B35] to-[#EC4899] shadow-lg hover:opacity-95 active:scale-95 transition-all cursor-pointer font-bold"
@@ -219,32 +194,32 @@
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-space-sm">
               <span class="material-symbols-outlined text-primary-container text-[20px]">monitoring</span>
-              <div class="font-headline-sm text-headline-sm text-on-surface">Sleep (7 Days)</div>
+              <div class="font-headline-sm text-headline-sm text-on-surface">{{ metric_label }} (7 Days)</div>
             </div>
-            <span class="font-label-caps text-label-caps text-on-surface-variant uppercase">Units: Hours / Sol</span>
+            <span class="font-label-caps text-label-caps text-on-surface-variant uppercase">Units: {{ unit }}</span>
           </div>
 
           <div class="relative w-full rounded-lg bg-surface-container-lowest p-space-md flex flex-col gap-space-sm overflow-hidden border border-white/5">
             <div class="flex items-center justify-between text-label-sm font-label-sm">
               <div class="flex items-center gap-space-xs text-[#FFB020]">
                 <span class="w-2.5 h-1 bg-[#FFB020] rounded-full inline-block"></span>
-                <span>Amber Range: 5.0 - 6.4 h</span>
+                <span>{{ caution_range_str }}</span>
               </div>
               <div class="flex items-center gap-space-xs text-primary-fixed-dim">
                 <span class="w-3 border-t border-dashed border-primary-fixed-dim inline-block"></span>
-                <span>Baseline: {{ baseline_val }} h</span>
+                <span>{% if has_baseline %}Baseline: {{ baseline_val }} {{ unit }}{% else %}Baseline: No data{% endif %}</span>
               </div>
             </div>
 
             <!-- Live Chart.js Container -->
             <div class="relative h-48 w-full">
-              <canvas aria-label="Interactive Chart.js: Sleep trend (7 days)" id="alert-sleep-trend" role="img"></canvas>
+              <canvas aria-label="Interactive Chart.js: {{ metric_label }} trend (7 days)" id="alert-sleep-trend" role="img"></canvas>
             </div>
           </div>
 
           <div class="flex items-center justify-between text-body-sm font-body-sm text-on-surface-variant">
-            <span>7-Day Mean: <strong class="text-on-surface font-headline-sm">{{ mean_val }} h</strong></span>
-            <span>Sleep Deficit: <strong class="text-[#FFB020] font-headline-sm">{{ deficit_str }}</strong></span>
+            <span>7-Day Mean: <strong class="text-on-surface font-headline-sm">{{ mean_str }}</strong></span>
+            <span>7-day total vs baseline: <strong class="text-[#FFB020] font-headline-sm">{{ deficit_str }}</strong></span>
           </div>
         </div>
 
@@ -374,47 +349,69 @@
 
     const ctx = canvas.getContext('2d');
     const labels = {{ chart_labels|safe }};
-    const sleepData = {{ chart_values|safe }};
-    const baseline = {{ baseline_val|stringformat:".1f" }};
+    const chartData = {{ chart_values|safe }};
+    const baseline = {{ baseline_js|safe }};
     const cautionLow = {{ caution_low|stringformat:".1f" }};
+    const cautionBandLow = {{ caution_band_low_js|safe }};
+    const cautionBandHigh = {{ caution_band_high_js|safe }};
+    const unit = {{ unit_json|safe }};
+    const yMin = {{ chart_y_min|stringformat:".4f" }};
+    const yMax = {{ chart_y_max|stringformat:".4f" }};
 
-    // Custom plugin for baseline line and amber caution zone
+    function isCautionPoint(val) {
+      if (val == null) return false;
+      if (cautionBandLow != null && val < cautionBandLow) return true;
+      if (cautionBandHigh != null && val > cautionBandHigh) return true;
+      return false;
+    }
+
+    // Custom plugin for baseline line and caution zone from amber_edges
     const missionThresholdsPlugin = {
       id: 'missionThresholds',
       beforeDraw(chart) {
         const { ctx, chartArea: { left, right }, scales: { y } } = chart;
         ctx.save();
 
-        // Shaded caution band 5.0h to 6.4h
-        const yTopCaution = y.getPixelForValue(6.4);
-        const yBottomCaution = y.getPixelForValue(5.0);
-        ctx.fillStyle = 'rgba(255, 176, 32, 0.07)';
-        ctx.fillRect(left, yTopCaution, right - left, yBottomCaution - yTopCaution);
+        if (cautionBandLow != null || cautionBandHigh != null) {
+          let yTopCaution;
+          let yBottomCaution;
+          if (cautionBandLow != null && cautionBandHigh != null) {
+            yTopCaution = y.getPixelForValue(cautionBandHigh);
+            yBottomCaution = y.getPixelForValue(cautionBandLow);
+          } else if (cautionBandLow != null) {
+            yTopCaution = y.getPixelForValue(cautionBandLow);
+            yBottomCaution = y.getPixelForValue(yMin);
+          } else {
+            yTopCaution = y.getPixelForValue(yMax);
+            yBottomCaution = y.getPixelForValue(cautionBandHigh);
+          }
+          ctx.fillStyle = 'rgba(255, 176, 32, 0.07)';
+          ctx.fillRect(left, yTopCaution, right - left, yBottomCaution - yTopCaution);
 
-        // Caution threshold dashed line
-        const yCaution = y.getPixelForValue(cautionLow);
-        ctx.beginPath();
-        ctx.setLineDash([4, 4]);
-        ctx.lineWidth = 1;
-        ctx.strokeStyle = 'rgba(255, 176, 32, 0.4)';
-        ctx.moveTo(left, yCaution);
-        ctx.lineTo(right, yCaution);
-        ctx.stroke();
+          const yCaution = y.getPixelForValue(cautionLow);
+          ctx.beginPath();
+          ctx.setLineDash([4, 4]);
+          ctx.lineWidth = 1;
+          ctx.strokeStyle = 'rgba(255, 176, 32, 0.4)';
+          ctx.moveTo(left, yCaution);
+          ctx.lineTo(right, yCaution);
+          ctx.stroke();
+        }
 
-        // Baseline dashed line
-        const yBase = y.getPixelForValue(baseline);
-        ctx.beginPath();
-        ctx.setLineDash([5, 5]);
-        ctx.lineWidth = 1.5;
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
-        ctx.moveTo(left, yBase);
-        ctx.lineTo(right, yBase);
-        ctx.stroke();
+        if (baseline != null) {
+          const yBase = y.getPixelForValue(baseline);
+          ctx.beginPath();
+          ctx.setLineDash([5, 5]);
+          ctx.lineWidth = 1.5;
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+          ctx.moveTo(left, yBase);
+          ctx.lineTo(right, yBase);
+          ctx.stroke();
 
-        // Baseline label
-        ctx.fillStyle = 'rgba(0, 240, 255, 0.7)';
-        ctx.font = '10px "Space Grotesk", sans-serif';
-        ctx.fillText(baseline + 'h BASE', left + 6, yBase - 5);
+          ctx.fillStyle = 'rgba(0, 240, 255, 0.7)';
+          ctx.font = '10px "Space Grotesk", sans-serif';
+          ctx.fillText(baseline + ' ' + unit + ' BASE', left + 6, yBase - 5);
+        }
 
         ctx.restore();
       }
@@ -431,8 +428,8 @@
       data: {
         labels: labels,
         datasets: [{
-          label: 'Duration (hrs)',
-          data: sleepData,
+          label: {{ metric_label_json|safe }},
+          data: chartData,
           borderColor: function(context) {
             const chart = context.chart;
             const { ctx, chartArea } = chart;
@@ -448,18 +445,17 @@
           fill: true,
           backgroundColor: gradient,
           pointBackgroundColor: function(context) {
-            const index = context.dataIndex;
-            return index >= 5 ? '#FFB020' : '#00f0ff';
+            return isCautionPoint(chartData[context.dataIndex]) ? '#FFB020' : '#00f0ff';
           },
           pointBorderColor: '#0a0e1a',
           pointBorderWidth: 2,
           pointRadius: function(context) {
-            return context.dataIndex === (sleepData.length - 1) ? 6 : 4;
+            return context.dataIndex === (chartData.length - 1) ? 6 : 4;
           },
           pointHoverRadius: 7,
           pointHoverBackgroundColor: '#ffffff',
           pointHoverBorderColor: function(context) {
-            return context.dataIndex >= 5 ? '#FFB020' : '#00f0ff';
+            return isCautionPoint(chartData[context.dataIndex]) ? '#FFB020' : '#00f0ff';
           },
           pointHoverBorderWidth: 3
         }]
@@ -486,9 +482,12 @@
             callbacks: {
               label: function(context) {
                 const val = context.parsed.y;
+                if (baseline == null) {
+                  return 'Reading: ' + val + ' ' + unit;
+                }
                 const delta = (val - baseline).toFixed(1);
                 const sign = delta > 0 ? '+' : '';
-                return `Reading: ${val} h (${sign}${delta} h vs BASE)`;
+                return 'Reading: ' + val + ' ' + unit + ' (' + sign + delta + ' ' + unit + ' vs BASE)';
               }
             }
           }
@@ -513,8 +512,8 @@
             }
           },
           y: {
-            min: 4.5,
-            max: 8.5,
+            min: yMin,
+            max: yMax,
             grid: {
               color: 'rgba(59, 73, 75, 0.25)',
               drawBorder: false
@@ -522,9 +521,8 @@
             ticks: {
               color: '#849495',
               font: { family: 'Inter', size: 10 },
-              stepSize: 1,
               callback: function(value) {
-                return value + 'h';
+                return value + ' ' + unit;
               }
             }
           }
@@ -532,22 +530,18 @@
       },
       plugins: [missionThresholdsPlugin]
     });
+
   });
 
   function updateChecklistState() {
-    const c1 = document.getElementById('check-1');
-    const c2 = document.getElementById('check-2');
-    const c3 = document.getElementById('check-3');
+    const boxes = document.querySelectorAll('#checklist-group input[type="checkbox"]');
     const counter = document.getElementById('action-counter');
-    
     let count = 0;
-    if (c1 && c1.checked) count++;
-    if (c2 && c2.checked) count++;
-    if (c3 && c3.checked) count++;
+    boxes.forEach(function(box) { if (box.checked) count++; });
 
     if (counter) {
-      counter.textContent = count + ' of 3 done';
-      if (count === 3) {
+      counter.textContent = count + ' of ' + boxes.length + ' done';
+      if (boxes.length && count === boxes.length) {
         counter.classList.remove('text-primary');
         counter.classList.add('text-primary-fixed');
       } else {
@@ -558,12 +552,12 @@
   }
 
   function logManualAction() {
-    const c2 = document.getElementById('check-2');
-    const c3 = document.getElementById('check-3');
-    if (c2 && !c2.checked) {
-      c2.checked = true;
-    } else if (c3 && !c3.checked) {
-      c3.checked = true;
+    const boxes = document.querySelectorAll('#checklist-group input[type="checkbox"]');
+    for (const box of boxes) {
+      if (!box.checked) {
+        box.checked = true;
+        break;
+      }
     }
     updateChecklistState();
 

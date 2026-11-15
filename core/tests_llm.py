@@ -374,7 +374,7 @@ class HookTests(TestCase):
         self.assertFalse(settings.COMPANION_LLM_ENABLED)
 
     def test_enabled_flag_calls_the_llm_and_uses_its_answers(self):
-        def fake(answers):
+        def fake(answers, user=None):
             return [{**a, 'ai_rephrased': True, 'ai_provider': 'Groq'} for a in answers]
 
         with override_settings(COMPANION_LLM_ENABLED=True), \
@@ -389,7 +389,7 @@ class HookTests(TestCase):
             plain = self.client.get(reverse('core:dashboard')).content.decode()
         self.assertNotIn('Rephrased by AI', plain)
 
-        def fake(answers):
+        def fake(answers, user=None):
             return [{**a, 'ai_rephrased': True, 'ai_provider': 'Groq'} for a in answers]
 
         with override_settings(COMPANION_LLM_ENABLED=True), \
