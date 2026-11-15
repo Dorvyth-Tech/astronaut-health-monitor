@@ -1,0 +1,124 @@
+{% extends 'base.html' %}
+
+{% block title %}CSV Upload | Space-Pulse{% endblock %}
+
+{% block content %}
+<div class="w-full max-w-7xl mx-auto px-margin sm:px-gutter py-space-lg flex flex-col gap-space-lg">
+
+  <!-- Header Section -->
+  <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-space-md pb-space-sm border-b border-white/5">
+    <div>
+      <div class="flex items-center gap-2 mb-1">
+        <span class="w-2 h-2 rounded-full bg-primary-container animate-pulse"></span>
+        <span class="font-label-caps text-label-caps text-outline uppercase tracking-wider">
+          Data Collection · CSV Import
+        </span>
+      </div>
+      <h1 class="font-headline-lg text-headline-lg text-primary tracking-tight">Upload Readings (CSV)</h1>
+      <p class="font-body-md text-body-md text-on-surface-variant">
+        Import readings for {{ current_astronaut.full_title }}. Every row is checked; rows that fail are skipped and listed below.
+      </p>
+    </div>
+  </div>
+
+  {% if error_message %}
+  <div class="p-space-md rounded-xl bg-error/15 border border-error/40 text-error flex items-center gap-space-sm">
+    <span class="material-symbols-outlined text-[22px]">error</span>
+    <span class="font-body-md text-sm font-semibold">{{ error_message }}</span>
+  </div>
+  {% endif %}
+
+  {% if result %}
+  <div class="p-space-md rounded-xl bg-nominal/15 border border-nominal/40 text-nominal flex items-center gap-space-sm">
+    <span class="material-symbols-outlined text-[22px]">check_circle</span>
+    <span class="font-headline-sm text-sm font-semibold">
+      {{ result.imported }} of {{ result.total }} row{{ result.total|pluralize }} imported, {{ result.rejected|length }} rejected.
+    </span>
+  </div>
+  {% endif %}
+
+  <div class="grid grid-cols-1 lg:grid-cols-12 gap-space-lg items-start">
+
+    <!-- Upload form -->
+    <div class="lg:col-span-5 rounded-xl bg-surface-container/70 backdrop-blur-md p-space-lg border border-white/5 shadow-xl flex flex-col gap-space-md">
+      <h2 class="font-headline-md text-lg text-primary font-bold">Choose a file</h2>
+      <form method="post" enctype="multipart/form-data" class="flex flex-col gap-space-md">
+        {% csrf_token %}
+        <input type="file" name="csv_file" accept=".csv,text/csv" required
+               class="w-full text-sm text-on-surface-variant font-body-md">
+        <div class="flex flex-wrap items-center gap-space-sm">
+          <button type="submit"
+                  class="px-space-md py-space-xs rounded-xl bg-primary-container text-on-primary-container font-headline-sm text-sm font-semibold flex items-center gap-2 shadow-[0_0_12px_rgba(0,240,255,0.25)] hover:scale-105 transition-transform">
+            <span class="material-symbols-outlined text-[18px]">upload_file</span>
+            Import
+          </button>
+          <a href="{% url 'telemetry:csv_template' %}"
+             class="px-space-md py-space-xs rounded-xl bg-surface-container-high text-on-surface-variant hover:text-on-surface font-headline-sm text-sm flex items-center gap-2 transition-colors">
+            <span class="material-symbols-outlined text-[18px]">download</span>
+            Sample template
+          </a>
+        </div>
+      </form>
+    </div>
+
+    <!-- Format help -->
+    <div class="lg:col-span-7 rounded-xl bg-surface-container-low/70 backdrop-blur-md p-space-lg border border-white/5 shadow-xl flex flex-col gap-space-sm">
+      <h2 class="font-headline-md text-lg text-primary font-bold">CSV format</h2>
+      <p class="font-body-md text-sm text-on-surface-variant">
+        First row must be <span class="font-mono text-primary">timestamp,metric,value</span>. One reading per row.
+      </p>
+      <ul class="list-disc pl-5 font-body-md text-sm text-on-surface-variant flex flex-col gap-1">
+        <li><span class="font-mono text-primary">timestamp</span>: ISO 8601, e.g. <span class="font-mono">2026-11-10T07:30:00Z</span> or <span class="font-mono">2026-11-10</span>. No time zone means UTC. Not in the future.</li>
+        <li><span class="font-mono text-primary">metric</span>: {% for key in metric_keys %}<span class="font-mono">{{ key }}</span>{% if not forloop.last %}, {% endif %}{% endfor %}.</li>
+        <li><span class="font-mono text-primary">value</span>: a number within a plausible range (it only catches typos).</li>
+        <li>A reading with the same metric and timestamp as one already saved is rejected as a duplicate.</li>
+        <li>Limits: {{ max_kb }} KB and {{ max_rows }} rows per file.</li>
+      </ul>
+    </div>
+  </div>
+
+  {% if result and result.rejected %}
+  <!-- Rejected rows report -->
+  <div class="w-full bg-surface-container-low/70 backdrop-blur-xl rounded-xl shadow-xl overflow-hidden flex flex-col border border-white/5">
+    <div class="flex items-center justify-between gap-space-md px-space-md py-space-sm border-b border-white/5">
+      <h2 class="font-headline-md text-lg text-error font-bold">Rejected rows ({{ result.rejected|length }})</h2>
+      <a href="{% url 'telemetry:csv_rejected' %}"
+         class="px-space-md py-space-xs rounded-xl bg-surface-container-high text-on-surface-variant hover:text-on-surface font-headline-sm text-sm flex items-center gap-2 transition-colors">
+        <span class="material-symbols-outlined text-[18px]">download</span>
+        Download report (CSV)
+      </a>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse min-w-[700px]">
+        <thead>
+          <tr class="bg-surface-container-high/60 border-b border-white/5">
+            <th class="py-space-sm px-space-md font-label-caps text-label-caps uppercase tracking-wider text-outline">Row</th>
+            <th class="py-space-sm px-space-md font-label-caps text-label-caps uppercase tracking-wider text-outline">Reason</th>
+            <th class="py-space-sm px-space-md font-label-caps text-label-caps uppercase tracking-wider text-outline">Timestamp</th>
+            <th class="py-space-sm px-space-md font-label-caps text-label-caps uppercase tracking-wider text-outline">Metric</th>
+            <th class="py-space-sm px-space-md font-label-caps text-label-caps uppercase tracking-wider text-outline">Value</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-white/5">
+          {% for item in shown_rejected %}
+          <tr class="hover:bg-surface-container-high/40 transition-colors">
+            <td class="py-space-xs px-space-md font-mono text-sm text-on-surface">{{ item.row }}</td>
+            <td class="py-space-xs px-space-md text-sm text-error">{{ item.reason }}</td>
+            <td class="py-space-xs px-space-md font-mono text-xs text-on-surface-variant">{{ item.timestamp }}</td>
+            <td class="py-space-xs px-space-md font-mono text-xs text-on-surface-variant">{{ item.metric }}</td>
+            <td class="py-space-xs px-space-md font-mono text-xs text-on-surface-variant">{{ item.value }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if result.rejected|length > shown_rejected|length %}
+    <div class="px-space-md py-space-sm text-xs text-outline font-mono border-t border-white/5">
+      Showing the first {{ shown_rejected|length }}. Download the report for all of them.
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}
