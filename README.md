@@ -186,3 +186,18 @@ This project is released under the MIT License. See `LICENSE`.
 
 ## Disclaimer
 *Prototype for demonstration purposes. Not a medical device.*
+
+## Pulse chat
+
+The dashboard has a **Chat with Pulse** panel under the Pulse Companion section. It is text only. Pulse is an AI companion and says so; it is not a medical device and does not diagnose.
+
+- **What it does.** Health and environment questions ("How am I doing?", "Explain my sleep trend", "Review the cabin environment") use the same routing and the same rule-based answers as Ask Pulse (`core/companion.py`), built from your own data. Sources stay labelled (simulated, self-reported, dataset, CSV), and "no data" or "old data" is shown as such, never as normal. "Start a check-in" links to the existing daily check-in page. Ordinary conversation (hello, "I feel lonely", "tell me something interesting") gets a short, warm reply.
+- **Safeguards.**
+  - Urgent phrases (for example chest pain or "I can't breathe") and any critical answer get a short fixed message that points to your flight surgeon through Ground Support and the Alerts page, with no small talk first.
+  - The model never writes health facts. With `COMPANION_LLM_ENABLED=True` it may write only the plain small-talk replies, under a short persona prompt (honest that it is an AI, no medical facts, numbers or diagnoses, encourages contact with crew and Ground Support). Each model reply must pass a safety check (no numbers, no diagnosis words, no claims of human feelings, short) or a fixed reply is used instead. Model-written replies are labelled "Written by AI (provider)".
+  - The model never receives readings, alerts, health answers or other users' data. It only gets your message, your saved notes and the last few turns of ordinary conversation.
+  - With the model off or offline, every feature still works with fixed replies.
+- **Memory controls.** Pulse remembers only what you explicitly ask it to ("remember that ..." in the chat, or the Remember box under **What Pulse remembers**). You can see every note and delete it at any time. Notes are private to your login (at most 20, 200 characters each) and are used only as context for ordinary conversation.
+- **Privacy.** Conversations and notes are stored per user and per astronaut; another user's conversation or note answers 404. Message text is never logged.
+- **Endpoints** (login required, JSON, CSRF): `POST /companion/chat/send/`, `GET /companion/chat/history/`, `POST /companion/chat/new/`, `GET /companion/chat/memories/`, `POST /companion/chat/memories/add/`, `POST /companion/chat/memories/<id>/delete/`. The code lives in the `companion` app.
+- **Use of AI.** In addition to the "Use of AI" section above, the optional model can write short small-talk replies for Pulse chat, as described here. The Pulse avatar is a small hand-written SVG (no generated image, no NASA logos). This feature was written with Grok Bot, an AI coding assistant, and reviewed by a human team member.
