@@ -708,3 +708,30 @@ class VoicePanelTests(ChatTestCase):
     def test_sources_page_discloses_voice(self):
         html = self.client_a.get(reverse('core:sources')).content.decode()
         self.assertIn('SPACE-PULSE never receives or stores audio', html)
+
+
+# --- fact requests never reach the model ---------------------------------------------------------
+
+
+class FactRequestTests(ChatTestCase):
+    talk = SmallTalkModelTests.talk
+
+    def test_fact_requests_get_a_checked_fact_and_skip_the_model(self):
+        for text in ('tell me something interesting', 'Give me a fun fact', 'surprise me', 'tell me a fact'):
+            record = []
+            reply = self.talk(text, "A comet's tail can be heard in space.", record)
+            self.assertIn(reply['text'], chat.FUN_FACTS, text)
+            self.assertEqual(reply['kind'], 'fixed', text)
+            self.assertFalse(reply.get('ai_label'), text)
+            self.assertEqual(record, [], text)
+
+    def test_checked_facts_pass_the_safety_check(self):
+        for fact in chat.FUN_FACTS:
+            self.assertTrue(chat.is_safe_smalltalk(fact), fact)
+
+    def test_persona_forbids_trivia_and_notes_as_facts(self):
+        record = []
+        self.talk('hello', 'Hello there.', record)
+        system = record[0]['messages'][0]['content']
+        self.assertIn('Never state facts, trivia', system)
+        self.assertIn('Never present the notes as facts', system)

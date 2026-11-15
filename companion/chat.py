@@ -99,6 +99,12 @@ FUN_FACTS = (
     "Crews in low Earth orbit see the Sun rise and set many times in a single day.",
     "In microgravity a candle flame becomes a small round ball, because hot air doesn't rise "
     "without gravity.",
+    "Space itself is silent: sound needs air or another material to travel through, and a "
+    "vacuum has none.",
+    "Footprints left on the Moon can last for a very long time, because there is no wind or "
+    "rain there to wear them away.",
+    "On the space station, moisture from the air and even from urine is cleaned and recycled "
+    "into drinking water.",
 )
 FORGET_TEXT = (
     "You're in control of what I remember. Use the Delete buttons under \"What Pulse "
@@ -141,6 +147,8 @@ OUT_OF_SCOPE = _rx(
 GREETING = _rx(r"^\s*(?:hi|hello|hey|hiya|howdy|greetings|good (?:morning|afternoon|evening|day)|how are you)\b")
 LONELY = _rx(r"\blonel\w*|\balone\b|homesick|\bbored\b|miss (?:my|home|family|earth)|\bisolated\b")
 THANKS = _rx(r"^\s*(?:thanks|thank you|cheers|appreciate)\b")
+# Requests for facts always get a hand-checked fact from FUN_FACTS, never model-written trivia.
+FACT_REQUEST = _rx(r"something interesting|fun fact|\bfacts?\b|surprise me|teach me something|did you know")
 FUN = _rx(r"something interesting|fun fact|tell me a (?:joke|story)|surprise me|cheer me up|\bjoke\b")
 FEELING_STATEMENT = _rx(r"\bi(?:'m|’m| am|'ve been| have been)?\s*(?:feel|feeling|felt)\b")
 MOOD_WORDS = _rx(r"\bmood\b|\bstress\w*")
@@ -259,6 +267,9 @@ PERSONA_PROMPT = (
     "treatments or health advice, and never talk about the person's health readings (you cannot "
     "see them here). If they sound lonely, sad or stressed, listen, ask what would help, and "
     "gently encourage them to talk with a crewmate or Ground Support. Do not create dependency. "
+    "Never state facts, trivia or claims about space, science, missions or other people; talk "
+    "about the person and the conversation instead. Never present the notes as facts about "
+    "anyone but the person. "
     "Be curious and kind, not overly cheerful. Keep it to at most two short sentences of plain "
     "text, with no numbers. "
     "The input is JSON with 'message', 'notes' (things the user asked you to remember, in their "
@@ -355,6 +366,8 @@ def _fixed_smalltalk(question, turn_index):
 
 
 def _smalltalk_reply(question, memories, recent, turn_index, user=None):
+    if FACT_REQUEST.search(question):
+        return _reply(FUN_FACTS[turn_index % len(FUN_FACTS)], FIXED)
     result = _llm_smalltalk(question, memories, recent, user=user)
     if result:
         return _reply(result[0], SMALLTALK, ai_provider=result[1])
@@ -408,7 +421,8 @@ def build_reply(question, astronaut, memories=(), recent=(), turn_index=0, user=
 
     keyword_intent = intent.classify_by_keywords(question)
     social_pattern = bool(LONELY.search(question) or GREETING.search(question)
-                          or FUN.search(question) or THANKS.search(question))
+                          or FUN.search(question) or THANKS.search(question)
+                          or FACT_REQUEST.search(question))
     if keyword_intent is None and social_pattern:
         return _smalltalk_reply(question, memories, recent, turn_index, user=user)
     if keyword_intent == 'mood' and _is_feeling_statement(question):
