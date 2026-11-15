@@ -19,6 +19,7 @@ from core.services import (
     evaluate_astronaut_metrics,
 )
 from core.alert_texts import parts_for
+from core.ground_delay import ground_panel_for
 
 
 NO_DATA_LABEL = 'No data'
@@ -265,6 +266,9 @@ def alert_detail(request, alert_id):
         'current_astronaut': astronaut,
         'alert': alert,
         'alert_copy': parts_for(alert.metric, alert.severity),
+        # Only a packet really uplinked after this alert fills the panel;
+        # otherwise the template drafts one and shows it as not sent.
+        'ground_panel': ground_panel_for(astronaut, [alert]),
         'chart_labels': chart_labels,
         'chart_values': chart_values,
         'baseline_val': real_baseline,
