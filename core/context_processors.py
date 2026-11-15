@@ -48,8 +48,14 @@ def spacepulse_context(request):
         except Exception:
             pass
 
+    from core.demo import READ_ONLY_MESSAGE, is_public_demo_user
+    public_demo = is_public_demo_user(getattr(request, 'user', None))
+
     return {
         'demo_mode': settings.DEMO_MODE,
+        # True only for /demo/ visitors: base.html shows the read-only banner.
+        'public_demo': public_demo,
+        'public_demo_message': READ_ONLY_MESSAGE,
         'is_simulated_data': is_simulated_data,
         'current_astronaut': astronaut,
         'greeting': get_greeting(),

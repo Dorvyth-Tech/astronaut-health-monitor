@@ -246,7 +246,19 @@ def _allow_live_llm(user):
         return False
     if window <= 0:
         window = 3600
-    key = f'{RATE_CACHE_PREFIX}{user_id}'
+    bucket = user_id
+    from core.demo import is_public_demo_user
+    if is_public_demo_user(user):
+        # Every public demo visitor shares one bucket, so reopening /demo/
+        # (a new throwaway user) cannot buy more live model calls.
+        try:
+            limit = int(getattr(settings, 'PUBLIC_DEMO_LLM_RATE_LIMIT', 60))
+        except (TypeError, ValueError):
+            limit = 60
+        if limit <= 0:
+            return False
+        bucket = 'public-demo'
+    key = f'{RATE_CACHE_PREFIX}{bucket}'
     if cache.add(key, 1, window):
         return True
     try:
