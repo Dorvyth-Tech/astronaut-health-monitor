@@ -58,8 +58,25 @@ SEVERITY_STYLE = {
 
 # Readings with no science rule: the 1-10 stress self-report. It is not one of the
 # 7 indicators (METRICS), but it is still evaluated (always no_data) so the
-# 'cumulative stress' tile and the history page can use it. It never alerts.
+# 'cumulative stress' tile and the history page can use it. It never alerts
+# and never feeds the official health score.
 DISPLAY_ONLY_METRICS = ('mood_stress',)
+
+# HUD tiles that are team-defined composites, not Science Lead indicators.
+# They stay visible (relabelled experimental) and must not affect status, score or alerts.
+EXPERIMENTAL_TAG = "Experimental · not a validated measure"
+PHYSIO_RESERVE_HELP = (
+    "Team-defined composite of recent sleep, HRV and resting HR. "
+    "Not a clinical metric and not used in the official health score or alerts."
+)
+CUMULATIVE_STRESS_HELP = (
+    "Team-defined grouping of the 1-10 stress self-report. "
+    "Not a clinical metric and not used in the official health score or alerts."
+)
+BIO_INDEX_HELP = (
+    "Team-defined label from the health-score band. "
+    "Not a Science Lead indicator and not a clinical diagnosis."
+)
 
 
 def status_to_severity(status):
@@ -451,17 +468,21 @@ def generate_sparkline_svg(values, width=70, height=20, padding=3):
 
 def calculate_health_score(metric_evals):
     """
-    Overall astronaut Health Score (0-100), Physio Reserve, and Cumulative Stress.
+    Overall astronaut Health Score (0-100) from the Science Lead's 7 indicators.
+
+    Physio Reserve, Cumulative Stress and Bio-Index are also returned so the
+    HUD can keep showing them, but they are team-defined experimental
+    composites: they never feed the official score, status or alerts.
     metric_evals: dict of metric_key -> evaluation dict from evaluate_metric_status
 
     The score is core/rules.health_score: the mean of green 100 / amber 60 /
-    red 20 over the indicators that HAVE data. With fewer than 3 such
+    red 20 over the official indicators that HAVE data. With fewer than 3 such
     indicators there is no score ("--", an empty ring).
     """
     statuses = [
-        SEVERITY_TO_STATUS[item['status']]
-        for item in metric_evals.values()
-        if item['status'] in SEVERITY_TO_STATUS
+        SEVERITY_TO_STATUS[metric_evals[key]['status']]
+        for key in rules.INDICATORS
+        if key in metric_evals and metric_evals[key].get('status') in SEVERITY_TO_STATUS
     ]
     score = rules.health_score(statuses)
 
@@ -529,6 +550,13 @@ def calculate_health_score(metric_evals):
         'circumference': circumference,
         'physio_reserve': f"{reserve}%",
         'cumulative_stress': cumulative_stress,
+        'physio_reserve_experimental': True,
+        'cumulative_stress_experimental': True,
+        'bio_index_experimental': True,
+        'experimental_tag': EXPERIMENTAL_TAG,
+        'physio_reserve_help': PHYSIO_RESERVE_HELP,
+        'cumulative_stress_help': CUMULATIVE_STRESS_HELP,
+        'bio_index_help': BIO_INDEX_HELP,
     }
 
 

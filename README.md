@@ -37,7 +37,7 @@ Space-Pulse is a deep-space astronaut health monitoring HUD and diagnostic web a
 
 2. **Deep-Space HUD Dashboard (`/`)**:
    - Matches approved `design/dashboard.html` HUD interface.
-   - Dynamic 0–100 Health Score composite radial ring with Physio Reserve and Cumulative Stress metrics.
+   - Dynamic 0–100 Health Score (from the 7 Science Lead indicators) plus labelled experimental Physio Reserve and Cumulative Stress tiles.
    - Dynamic natural-language trend detection headline (e.g. *"Mostly nominal. Sleep Duration has dropped four days in a row."*).
    - 7 Vital & Environmental Indicator cards with SVG sparklines calculated from the last 7 readings.
    - Interactive Chart.js Sleep Trend line chart with baseline dashed line, shaded caution band, and 7d/30d/mission cycle range toggles.

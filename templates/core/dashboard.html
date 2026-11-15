@@ -79,9 +79,10 @@
                 <span class="w-2 h-2 rounded-full" style="background-color: {{ health_score.color }};"></span>
                 {{ health_score.label }}
               </span>
-              <span class="font-label-caps text-label-caps text-primary-container px-space-sm py-0.5 rounded-lg bg-surface-container-high">
+              <span class="font-label-caps text-label-caps text-primary-container px-space-sm py-0.5 rounded-lg bg-surface-container-high" title="{{ health_score.bio_index_help }}">
                 {{ health_score.bio_index }}
               </span>
+              <span class="font-label-caps text-[10px] text-outline uppercase tracking-wider" title="{{ health_score.bio_index_help }}">{{ health_score.experimental_tag }}</span>
             </div>
             <p class="font-headline-sm text-headline-sm text-on-surface font-semibold max-w-lg">
               {{ headline_summary }}
@@ -101,11 +102,13 @@
             <span class="font-body-sm text-body-sm text-[#22E3A0] flex items-center gap-1">
               <span class="material-symbols-outlined text-[14px]">trending_up</span> +1.2% cycle
             </span>
+            <span class="font-label-caps text-[10px] text-outline uppercase tracking-wider mt-1" title="{{ health_score.physio_reserve_help }}">{{ health_score.experimental_tag }}</span>
           </div>
           <div class="flex flex-col">
             <span class="font-label-caps text-label-caps text-outline uppercase">Cumulative Stress</span>
             <span class="font-telemetry-metric text-telemetry-metric text-on-surface mt-0.5">{{ health_score.cumulative_stress }}</span>
             <span class="font-body-sm text-body-sm text-on-surface-variant">Class A Hab</span>
+            <span class="font-label-caps text-[10px] text-outline uppercase tracking-wider mt-1" title="{{ health_score.cumulative_stress_help }}">{{ health_score.experimental_tag }}</span>
           </div>
         </div>
 
@@ -211,11 +214,11 @@
             </div>
             <div class="flex items-center gap-2">
               <span class="w-4 h-0.5 border-b-2 border-dashed border-on-surface"></span>
-              <span class="font-body-sm text-body-sm text-on-surface-variant">Your baseline {{ sleep_baseline }} h</span>
+              <span class="font-body-sm text-body-sm text-on-surface-variant">{% if sleep_baseline %}Your baseline {{ sleep_baseline }} h{% else %}Your baseline (not set){% endif %}</span>
             </div>
             <div class="flex items-center gap-2">
               <span class="w-3 h-2 bg-[#FFB020]/25 rounded"></span>
-              <span class="font-body-sm text-body-sm text-[#FFB020]">Caution range (&lt;6.0 h)</span>
+              <span class="font-body-sm text-body-sm text-[#FFB020]">{% if sleep_caution_low %}Caution: more than 1 h below baseline (&lt;{{ sleep_caution_low|floatformat:1 }} h){% else %}Caution: more than 1 h below the crew member's baseline{% endif %}</span>
             </div>
           </div>
         </div>
@@ -367,7 +370,7 @@
             <span class="font-label-caps text-label-caps uppercase">EVA Readiness Protocol</span>
           </div>
           <p class="font-body-sm text-body-sm text-on-surface-variant">
-            Next scheduled airlock repressurization check in 04h 15m. Hydration index: 96%.
+            Next scheduled airlock repressurization check in 04h 15m. Hydration index: 96% (simulated).
           </p>
         </div>
       </div>
@@ -670,8 +673,12 @@
     const ctx = document.getElementById('sleep-chart').getContext('2d');
     const labels = apiData.labels;
     const values = apiData.values;
-    const baseline = apiData.baseline || 7.2;
-    const cautionLow = apiData.caution_low || 6.0;
+    const baseline = (typeof apiData.baseline === 'number') ? apiData.baseline : null;
+    // Science Lead amber edge: more than 1 h below the personal baseline.
+    // Never fall back to a hardcoded 6.0 h band.
+    const cautionLow = (typeof apiData.caution_low === 'number')
+      ? apiData.caution_low
+      : (baseline !== null ? baseline - 1.0 : null);
 
     // Gradient fill under the line
     const gradient = ctx.createLinearGradient(0, 0, 0, 240);
@@ -679,9 +686,9 @@
     gradient.addColorStop(0.7, 'rgba(0, 240, 255, 0.05)');
     gradient.addColorStop(1, 'rgba(0, 240, 255, 0.0)');
 
-    // Color points based on caution threshold
-    const pointColors = values.map(v => v < cautionLow ? '#FFB020' : '#00F0FF');
-    const pointRadii = values.map(v => v < cautionLow ? 6 : 4);
+    // Color points from the baseline-relative caution edge only
+    const pointColors = values.map(v => (cautionLow !== null && v < cautionLow) ? '#FFB020' : '#00F0FF');
+    const pointRadii = values.map(v => (cautionLow !== null && v < cautionLow) ? 6 : 4);
 
     if (sleepChartInstance) {
       sleepChartInstance.destroy();
@@ -706,7 +713,7 @@
             pointRadius: pointRadii,
             pointHoverRadius: 7,
           },
-          {
+          ...(baseline !== null ? [{
             label: `Baseline (${baseline} h)`,
             data: labels.map(() => baseline),
             borderColor: 'rgba(255, 255, 255, 0.4)',
@@ -715,9 +722,9 @@
             fill: false,
             pointRadius: 0,
             pointHoverRadius: 0,
-          },
-          {
-            label: `Caution Threshold (<${cautionLow} h)`,
+          }] : []),
+          ...(cautionLow !== null ? [{
+            label: `Caution (more than 1 h below baseline, <${cautionLow} h)`,
             data: labels.map(() => cautionLow),
             borderColor: 'rgba(255, 176, 32, 0.5)',
             borderWidth: 1.5,
@@ -725,7 +732,7 @@
             fill: false,
             pointRadius: 0,
             pointHoverRadius: 0,
-          }
+          }] : [])
         ]
       },
       options: {
@@ -744,13 +751,14 @@
             padding: 10,
             callbacks: {
               label: function(context) {
+                const name = context.dataset.label || '';
                 if (context.datasetIndex === 0) {
                   return ` Sleep: ${context.parsed.y.toFixed(1)} h`;
-                } else if (context.datasetIndex === 1) {
-                  return ` Baseline: ${baseline.toFixed(1)} h`;
-                } else {
-                  return ` Caution Threshold: ${cautionLow.toFixed(1)} h`;
                 }
+                if (name.indexOf('Baseline') === 0) {
+                  return ` Baseline: ${baseline.toFixed(1)} h`;
+                }
+                return ` Caution: more than 1 h below baseline (${cautionLow.toFixed(1)} h)`;
               }
             }
           }
