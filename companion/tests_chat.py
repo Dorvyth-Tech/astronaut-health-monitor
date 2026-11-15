@@ -678,3 +678,12 @@ class RateLimitTests(ChatTestCase):
         with mock.patch('companion.views.chat.build_reply', wraps=chat.build_reply) as build:
             self.say('hello')
         self.assertEqual(build.call_args.kwargs['user'], self.user_a)
+
+
+class ExtraUrgentWordsTests(SimpleTestCase):
+    def test_dizzy_faint_seizure_numb_are_urgent(self):
+        for text in ('I feel dizzy', 'I fainted earlier', 'I think I had a seizure', 'my arm is numb'):
+            self.assertTrue(chat.is_urgent(text), text)
+
+    def test_number_is_not_numb(self):
+        self.assertFalse(chat.is_urgent('what number is my sleep score'))

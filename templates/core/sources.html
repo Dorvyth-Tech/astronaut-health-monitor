@@ -151,10 +151,14 @@
       <p class="font-body-sm text-body-sm text-on-surface-variant">
         An optional language-model layer (default provider {{ catalog.companion.default_provider }},
         model {{ catalog.companion.default_groq_model }}, with Gemini
-        {{ catalog.companion.default_gemini_model }} as fallback) may only rephrase those
+        {{ catalog.companion.default_gemini_model }} as fallback) may rephrase those
         rule-based answers and classify a typed question's intent by choosing from a fixed list.
-        The model never writes the underlying answers. A safety validator rejects any rewrite
+        The model never writes the underlying health answers. A safety validator rejects any rewrite
         that adds numbers or diagnosis-style words that were not in the original text.
+        In the Pulse chat, the model may also write short small-talk replies (greetings,
+        everyday conversation). These never contain health facts: each reply is checked and
+        rejected if it has numbers, diagnosis-style words or claims of human feelings, falls back
+        to a fixed reply, and is labelled "Written by AI". Urgent messages never reach the model.
         The layer is off unless {{ catalog.companion.llm_off_unless }}.
       </p>
     </section>

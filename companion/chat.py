@@ -120,7 +120,8 @@ URGENT = _rx(
     r"\bemergency\b|\bemergencies\b|hurt(?:ing)? myself|harm myself|self[- ]harm|kill myself|suicid\w*|"
     r"end my life|want to die|don.?t want to live|"
     r"passed out|passing out|unconscious|\boverdose\b|bleeding (?:badly|heavily)|severe pain|"
-    r"decompress\w*|depressuri[sz]\w*|\bfire\b|\bsmoke\b|toxic"
+    r"decompress\w*|depressuri[sz]\w*|\bfire\b|\bsmoke\b|toxic|"
+    r"\bdizzy\b|\bdizziness\b|\bfaint(?:ed|ing)?\b|\bseizures?\b|\bnumb(?:ness)?\b"
 )
 REMEMBER = _rx(r"^\s*(?:please\s+)?remember(?:\s+that|\s*:)?\s+(.+?)\s*$")
 RECALL = _rx(r"what (?:do|did) you (?:remember|know) about me|what do you remember\b|what have you (?:remembered|saved)")
