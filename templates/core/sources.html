@@ -1,0 +1,189 @@
+{% extends 'base.html' %}
+
+{% block title %}Sources | Space-Pulse HUD{% endblock %}
+
+{% block content %}
+<div class="flex flex-col w-full">
+  <div class="w-full max-w-7xl mx-auto px-margin sm:px-gutter lg:px-margin-desktop py-space-lg flex flex-col gap-space-lg">
+
+    <div class="flex flex-col gap-space-xs">
+      <span class="inline-flex items-center gap-1.5 px-space-sm py-0.5 rounded-full bg-primary-container/10 text-primary-container font-label-caps text-label-caps uppercase tracking-widest self-start">
+        Data provenance
+      </span>
+      <h1 class="font-headline-lg text-headline-lg text-primary tracking-tight">Sources</h1>
+      <p class="font-body-md text-body-md text-on-surface-variant max-w-3xl">
+        Where every data point in SPACE-PULSE comes from, and which rules use it.
+        Thresholds below are copied from the running code, not restated from memory.
+      </p>
+    </div>
+
+    <!-- (a) Seven Science Lead indicators -->
+    <section class="w-full rounded-xl bg-surface-container/70 backdrop-blur-md p-space-lg shadow-xl border border-white/5 flex flex-col gap-space-md">
+      <div class="flex flex-col gap-space-xs">
+        <h2 class="font-headline-sm text-headline-sm text-on-surface tracking-wide">Science Lead indicators</h2>
+        <p class="font-body-sm text-body-sm text-on-surface-variant">
+          Seven indicators feed the official health score and alerts.
+          Citation: {{ catalog.citation }}
+        </p>
+      </div>
+
+      <div class="flex flex-col gap-space-md">
+        {% for item in catalog.indicators %}
+        <article class="rounded-xl bg-surface-container-low/80 p-space-md border border-white/5 flex flex-col gap-space-sm">
+          <div class="flex flex-wrap items-baseline justify-between gap-space-sm">
+            <h3 class="font-headline-sm text-headline-sm text-primary">{{ item.name }}</h3>
+            <span class="font-label-caps text-label-caps text-outline uppercase">{{ item.unit }}</span>
+          </div>
+          <p class="font-body-sm text-body-sm text-on-surface-variant">
+            <span class="text-on-surface font-medium">Input source.</span> {{ item.input_source }}
+          </p>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-space-sm">
+            <div class="rounded-lg bg-surface-container/80 p-space-sm">
+              <div class="font-label-caps text-label-caps uppercase tracking-wider text-[#FFB020] mb-1">Amber</div>
+              <p class="font-body-sm text-body-sm text-on-surface">{{ item.amber }}</p>
+            </div>
+            <div class="rounded-lg bg-surface-container/80 p-space-sm">
+              <div class="font-label-caps text-label-caps uppercase tracking-wider text-[#FF4D6D] mb-1">Red</div>
+              <p class="font-body-sm text-body-sm text-on-surface">{{ item.red }}</p>
+            </div>
+          </div>
+          <p class="font-label-sm text-label-sm text-outline">{{ item.citation }}</p>
+        </article>
+        {% endfor %}
+      </div>
+
+      <p class="font-body-sm text-body-sm text-on-surface-variant">{{ catalog.unwired_rule_inputs_note }}</p>
+      <p class="font-body-sm text-body-sm text-on-surface-variant">
+        Reading source labels used in the app:
+        {% for src in catalog.reading_sources %}
+          <span class="font-label-caps text-label-caps uppercase text-primary-container">{{ src.key }}</span>
+          ({{ src.label }}){% if not forloop.last %},{% else %}.{% endif %}
+        {% endfor %}
+      </p>
+    </section>
+
+    <!-- (b) Experimental / simulated tiles -->
+    <section class="w-full rounded-xl bg-surface-container/70 backdrop-blur-md p-space-lg shadow-xl border border-white/5 flex flex-col gap-space-md">
+      <h2 class="font-headline-sm text-headline-sm text-on-surface tracking-wide">Experimental and simulated tiles</h2>
+      <p class="font-body-sm text-body-sm text-on-surface-variant">
+        These tiles stay on the HUD for the demo layout. They are not validated measures
+        and they are not part of the official health score, status or alerts.
+      </p>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-space-md">
+        {% for tile in catalog.experimental_tiles %}
+        <article class="rounded-xl bg-surface-container-low/80 p-space-md border border-white/5 flex flex-col gap-space-xs">
+          <div class="flex items-baseline justify-between gap-space-sm">
+            <h3 class="font-headline-sm text-headline-sm text-on-surface">{{ tile.name }}</h3>
+            <span class="font-label-caps text-[10px] text-outline uppercase tracking-wider">{{ tile.tag }}</span>
+          </div>
+          <p class="font-body-sm text-body-sm text-on-surface-variant">{{ tile.help }}</p>
+        </article>
+        {% endfor %}
+      </div>
+    </section>
+
+    <!-- (c) Space weather -->
+    <section class="w-full rounded-xl bg-surface-container/70 backdrop-blur-md p-space-lg shadow-xl border border-white/5 flex flex-col gap-space-md">
+      <h2 class="font-headline-sm text-headline-sm text-on-surface tracking-wide">Space weather (NASA DONKI)</h2>
+      <p class="font-body-sm text-body-sm text-on-surface-variant">{{ catalog.space_weather.label }}</p>
+      <div>
+        <div class="font-label-caps text-label-caps uppercase tracking-wider text-outline mb-space-xs">Endpoints</div>
+        <ul class="flex flex-col gap-1">
+          {% for url in catalog.space_weather.endpoint_urls %}
+          <li class="font-body-sm text-body-sm text-on-surface">
+            <a class="text-primary-container hover:underline" href="{{ url }}" rel="noopener noreferrer">{{ url }}</a>
+          </li>
+          {% endfor %}
+        </ul>
+        <p class="font-body-sm text-body-sm text-on-surface-variant mt-space-xs">
+          Catalogue:
+          <a class="text-primary-container hover:underline" href="{{ catalog.space_weather.home_url }}" rel="noopener noreferrer">{{ catalog.space_weather.home_url }}</a>
+        </p>
+      </div>
+      <div>
+        <div class="font-label-caps text-label-caps uppercase tracking-wider text-outline mb-space-xs">NOAA G-scale mapping</div>
+        <p class="font-body-sm text-body-sm text-on-surface-variant mb-space-xs">
+          Geomagnetic-storm Kp values from DONKI GST are mapped to the published NOAA G-scale
+          (<a class="text-primary-container hover:underline" href="{{ catalog.space_weather.noaa_scales_url }}" rel="noopener noreferrer">NOAA scales explanation</a>).
+          No thresholds of our own are added.
+        </p>
+        <ul class="grid grid-cols-1 sm:grid-cols-2 gap-1">
+          {% for line in catalog.space_weather.g_scale %}
+          <li class="font-body-sm text-body-sm text-on-surface">{{ line }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+      <div class="rounded-xl bg-surface-container-low/80 p-space-md border border-white/5">
+        <div class="font-label-caps text-label-caps uppercase tracking-wider text-outline mb-space-xs">Latest stored snapshot</div>
+        {% if catalog.space_weather.snapshot %}
+        <p class="font-body-sm text-body-sm text-on-surface">
+          Source: {{ catalog.space_weather.snapshot.source_label }}
+          {% if catalog.space_weather.snapshot.is_sample %}
+          <span class="font-label-caps text-label-caps uppercase text-[#FFB020]">{{ catalog.space_weather.sample_label }}</span>
+          {% endif %}
+        </p>
+        <p class="font-body-sm text-body-sm text-on-surface-variant">
+          Fetched at: {{ catalog.space_weather.snapshot.fetched_at|date:"Y-m-d H:i:s T" }}
+        </p>
+        {% else %}
+        <p class="font-body-sm text-body-sm text-on-surface-variant">No snapshot stored yet.</p>
+        {% endif %}
+      </div>
+    </section>
+
+    <!-- (d) Research reference -->
+    <section class="w-full rounded-xl bg-surface-container/70 backdrop-blur-md p-space-lg shadow-xl border border-white/5 flex flex-col gap-space-sm">
+      <h2 class="font-headline-sm text-headline-sm text-on-surface tracking-wide">Research reference</h2>
+      <p class="font-body-sm text-body-sm text-on-surface">
+        NASA Open Science Data Repository (OSDR):
+        <a class="text-primary-container hover:underline" href="{{ catalog.osdr_url }}" rel="noopener noreferrer">{{ catalog.osdr_url }}</a>
+      </p>
+      <p class="font-body-sm text-body-sm text-on-surface-variant">{{ catalog.osdr_note }}</p>
+    </section>
+
+    <!-- (e) Pulse Companion -->
+    <section class="w-full rounded-xl bg-surface-container/70 backdrop-blur-md p-space-lg shadow-xl border border-white/5 flex flex-col gap-space-sm">
+      <h2 class="font-headline-sm text-headline-sm text-on-surface tracking-wide">Pulse Companion</h2>
+      <p class="font-body-sm text-body-sm text-on-surface-variant">
+        Answers are rule-based. They are built from statuses the app has already computed;
+        the companion never invents a threshold or a diagnosis.
+      </p>
+      <p class="font-body-sm text-body-sm text-on-surface-variant">
+        An optional language-model layer (default provider {{ catalog.companion.default_provider }},
+        model {{ catalog.companion.default_groq_model }}, with Gemini
+        {{ catalog.companion.default_gemini_model }} as fallback) may only rephrase those
+        rule-based answers and classify a typed question's intent by choosing from a fixed list.
+        The model never writes the underlying answers. A safety validator rejects any rewrite
+        that adds numbers or diagnosis-style words that were not in the original text.
+        The layer is off unless {{ catalog.companion.llm_off_unless }}.
+      </p>
+    </section>
+
+    <!-- (f) Team assumptions -->
+    <section class="w-full rounded-xl bg-surface-container/70 backdrop-blur-md p-space-lg shadow-xl border border-white/5 flex flex-col gap-space-sm">
+      <h2 class="font-headline-sm text-headline-sm text-on-surface tracking-wide">Team assumptions</h2>
+      <ul class="flex flex-col gap-space-sm">
+        <li class="font-body-sm text-body-sm text-on-surface-variant">
+          <span class="text-on-surface font-medium">Exercise plan:</span>
+          {{ catalog.team_assumptions.exercise_plan_minutes }} minutes per week.
+          {{ catalog.team_assumptions.exercise_source }}
+        </li>
+        <li class="font-body-sm text-body-sm text-on-surface-variant">
+          <span class="text-on-surface font-medium">Baselines:</span>
+          computed by default as the mean of mission days 1–{{ catalog.team_assumptions.baseline_days }}.
+          A crew member can type a manual override on the Profile &amp; Baselines page;
+          overrides are flagged and can be reset to the computed value.
+        </li>
+      </ul>
+    </section>
+
+    <!-- (g) Disclaimer -->
+    <section class="w-full rounded-xl bg-surface-container/70 backdrop-blur-md p-space-lg shadow-xl border border-white/5 flex flex-col gap-space-sm">
+      <h2 class="font-headline-sm text-headline-sm text-on-surface tracking-wide">Disclaimer</h2>
+      <p class="font-body-md text-body-md text-on-surface">{{ catalog.prototype_disclaimer }}</p>
+      <p class="font-body-md text-body-md text-on-surface">{{ catalog.disclaimer }}</p>
+    </section>
+
+  </div>
+</div>
+{% endblock %}
