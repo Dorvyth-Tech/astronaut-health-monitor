@@ -499,10 +499,18 @@ def dashboard_view(request):
     for answer in companion_answers:
         answer['selected'] = answer['id'] == selected_id
 
+    # Environmental symptom correlation check
+    try:
+        from environment.services import detect_symptom_environment_correlation
+        symptom_note = detect_symptom_environment_correlation(astronaut)
+    except Exception:
+        symptom_note = None
+
     # Space weather (NASA DONKI): context only, never part of the status or the score above.
     _, space_weather = _space_weather_view_data()
 
     return render(request, 'core/dashboard.html', {
+        'symptom_note': symptom_note,
         'active_nav': 'dashboard',
         'current_astronaut': astronaut,
         'space_weather': space_weather,

@@ -61,6 +61,7 @@ INSTALLED_APPS = [
     'core',
     'telemetry',
     'alerts',
+    'environment',
     'companion',     # Pulse chat: conversations, messages, memories
 ]
 
@@ -151,3 +152,10 @@ STORAGES = {
 }
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# OpenWeather API Configuration for Environment Monitor
+OPENWEATHER_API_KEY = config('OPENWEATHER_API_KEY', default='')
+OPENWEATHER_CITY = config('OPENWEATHER_CITY', default='Cape Canaveral,US')
+
+# NASA Space Weather API (DONKI) Configuration
+NASA_API_KEY = config('NASA_API_KEY', default='DEMO_KEY')

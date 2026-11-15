@@ -133,6 +133,40 @@
 
   </div>
 
+  <!-- Integrated Environmental Habitat Hazards -->
+  {% if environment_alerts %}
+  <div class="flex flex-col gap-space-sm mb-space-xs">
+    <div class="flex items-center gap-2">
+      <span class="material-symbols-outlined text-[18px] text-primary-container">thermostat</span>
+      <h2 class="font-headline-sm text-sm uppercase tracking-wider text-primary">Environmental Life-Support &amp; Atmospheric Hazards</h2>
+    </div>
+    {% for ea in environment_alerts %}
+    <div class="p-space-md rounded-xl bg-surface-container/70 border border-white/5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-space-sm {% if ea.severity == 'danger' %}border-l-4 border-l-error{% else %}border-l-4 border-l-[#FFB020]{% endif %}">
+      <div class="flex items-start gap-space-sm">
+        <span class="material-symbols-outlined text-[20px] {% if ea.severity == 'danger' %}text-error{% else %}text-[#FFB020]{% endif %}">
+          {% if ea.severity == 'danger' %}emergency_home{% else %}warning{% endif %}
+        </span>
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="font-headline-sm text-xs uppercase tracking-wide text-on-surface font-bold">[{{ ea.reading.get_location_display }} Habitat]</span>
+            <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase {% if ea.severity == 'danger' %}bg-error/20 text-error{% else %}bg-[#FFB020]/20 text-[#FFB020]{% endif %}">
+              {{ ea.severity }}
+            </span>
+          </div>
+          <div class="font-body-md text-xs text-on-surface-variant mt-0.5">{{ ea.message }}</div>
+        </div>
+      </div>
+      <div class="flex items-center gap-space-md shrink-0 self-end sm:self-auto font-mono text-xs text-outline">
+        <span>{{ ea.created_at|date:"H:i UTC" }}</span>
+        <a href="{% url 'environment:dashboard' %}" class="px-space-sm py-1 rounded-lg bg-surface-container-high hover:bg-surface-container-highest text-primary-container text-xs transition-colors">
+          View Environment
+        </a>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
   <!-- Alerts List Feed -->
   <div class="flex flex-col gap-space-md">
     {% for alert in alerts %}

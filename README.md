@@ -21,6 +21,7 @@ Space-Pulse is a deep-space astronaut health monitoring HUD and diagnostic web a
 - `core/`: Astronaut profiles, personal baselines, ground support messages, HUD context processors, and clinical business logic (`services.py`).
 - `telemetry/`: Biometric and habitat readings (`Reading`), daily self-reported logs (`CheckIn`), and JSON chart telemetry endpoints (`/api/readings/`).
 - `alerts/`: Diagnostic alert engine (`Alert`) with severity levels (Nominal, Caution, Critical), flight surgeon sync, and diagnostic pod details.
+- `environment/`: Habitat condition monitoring, simulated planetary environments, NASA DONKI event context, and environment alerts.
 - `design/`: Approved UI designs and layout references (`dashboard.html`, `login.html`, `daily_checkin.html`, `alert_details.html`).
 - `templates/`: Django template hierarchy (`base.html`, pages, navigation, modals).
 - `static/`: Static assets, stylesheets, scripts.
@@ -85,6 +86,12 @@ Space-Pulse is a deep-space astronaut health monitoring HUD and diagnostic web a
    - Chart.js 7-day mini trend waveform with baseline reference and caution threshold line.
    - Escalation protocol matrix and dismiss/acknowledge confirmation modal.
 
+9. **Environment Monitor (`/environment/`)**:
+   - Tracks habitat conditions and displays NASA DONKI event records for context.
+   - Radiation values are prototype model estimates, not direct dosimeter readings.
+   - CME and solar-particle events remain unclassified pending mission-approved criteria; fallback events are labeled sample data and do not generate alerts or radiation boosts.
+   - Refresh environment space-weather records with `python manage.py fetch_environment`.
+
 ---
 
 ## Local Setup & Quick Start
@@ -130,6 +137,7 @@ This populates:
 - Active and historical signals.
 - Every seeded reading is labelled `simulated`, and pages show a "SIMULATED DATA" banner while simulated readings are displayed. Reading sources are `manual` (check-in or typed entry), `csv`, `simulated` and `dataset`.
 - A login for each astronaut (e.g. `amara.reyes@mission.example` / `validAccess2026`). A login is linked to its astronaut by the same email.
+- Environmental fallback event examples are marked `SAMPLE DATA`; they are not NASA observations or operational alerts.
 
 ### 6. Configuration (optional)
 Copy `.env.example` to `.env` to change settings. Settings:
