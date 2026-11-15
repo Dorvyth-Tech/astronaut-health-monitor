@@ -2,7 +2,7 @@
 **Deep-Space Astronaut Health Monitoring Web App**
 *NASA Space Apps Challenge 2026 — Challenge: Health Monitoring Software for Astronauts on Space Missions*
 
-Space-Pulse is a deep-space astronaut health monitoring HUD and diagnostic web application designed for long-duration transit missions (e.g. Earth-Mars Transfer, 540-day mission cycle). It provides real-time bio-telemetry visualization, threshold and trend detection, NASA Human Research Program (HRP) 4-domain spaceflight risk matrix evaluations, daily check-in evaluations, historical analysis with Chart.js, personal baselines management, ground support comm packets, and signal alerts.
+Space-Pulse is a deep-space astronaut health monitoring HUD and diagnostic web application designed for long-duration transit missions (e.g. Earth-Mars Transfer, 540-day mission cycle). It provides real-time bio-telemetry visualization, threshold and trend detection, NASA Human Research Program (HRP) 5-hazard spaceflight risk matrix evaluations, daily check-in evaluations, historical analysis with Chart.js, personal baselines management, ground support comm packets, and signal alerts.
 
 ---
 
@@ -41,7 +41,7 @@ Space-Pulse is a deep-space astronaut health monitoring HUD and diagnostic web a
    - Dynamic natural-language trend detection headline (e.g. *"Mostly nominal. Sleep Duration has dropped four days in a row."*).
    - 7 Vital & Environmental Indicator cards with SVG sparklines calculated from the last 7 readings.
    - Interactive Chart.js Sleep Trend line chart with baseline dashed line, shaded caution band, and 7d/30d/mission cycle range toggles.
-   - NASA HRP 4-Domain Spaceflight Risk Matrix (Altered Gravity, Isolation, Closed Environment, and Radiation prototype indicator).
+   - NASA HRP 5-hazard Spaceflight Risk Matrix (Altered Gravity, Isolation, Closed Environment, Radiation prototype indicator, and Distance from Earth: whether any alert calls for ground contact, with NASA's up-to-22-minute one-way comm delay).
    - Live Mars transit progress indicator (Sol 142 of 540 / 26.3% transit elapsed).
    - Modal dialog for logging ad-hoc manual telemetry records.
 
@@ -171,6 +171,7 @@ Open [http://127.0.0.1:8000/](http://127.0.0.1:8000/) in your web browser.
 A public provenance page at [`/sources/`](/sources/) lists every indicator, rule, citation and disclaimer in one place.
 
 - **NASA DONKI** (Space Weather Database Of Notifications, Knowledge, Information): live space-weather events are requested from [api.nasa.gov](https://api.nasa.gov). The DONKI catalogue is also published by CCMC at [kauai.ccmc.gsfc.nasa.gov/DONKI](https://kauai.ccmc.gsfc.nasa.gov/DONKI/) and [ccmc.gsfc.nasa.gov/tools/DONKI](https://ccmc.gsfc.nasa.gov/tools/DONKI/).
+- **NASA HRP hazards** ([five hazards](https://www.nasa.gov/hrp/hazards/), [distance from Earth](https://www.nasa.gov/hrp/hazard-distance-from-earth/), [Mars comm delay paper](https://www.nasa.gov/wp-content/uploads/2024/01/mars-communications-disruption-and-delay.pdf)): the hazard grouping and the comm-delay figure on the Distance from Earth tile.
 - **NASA Open Science Data Repository (OSDR)** ([osdr.nasa.gov](https://osdr.nasa.gov)): cited as a research reference only. The demo does not load crew telemetry from OSDR.
 - **NOAA Space Weather Scales** ([swpc.noaa.gov/noaa-scales-explanation](https://www.swpc.noaa.gov/noaa-scales-explanation)): used to map DONKI geomagnetic-storm Kp values to the NOAA G-scale (G1–G5).
 

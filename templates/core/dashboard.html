@@ -304,13 +304,13 @@
             <div class="font-headline-sm text-headline-sm text-on-surface font-semibold">Spaceflight Risk Vectors</div>
             <p class="font-body-sm text-body-sm text-on-surface-variant">Automated NASA Human Research Program (HRP) categorization</p>
           </div>
-          <span class="font-label-caps text-label-caps text-outline uppercase">4 Domain Matrix</span>
+          <span class="font-label-caps text-label-caps text-outline uppercase">5 HRP Hazards</span>
         </div>
 
         <!-- 2x2 Grid -->
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-space-md">
           {% for vector in risk_vectors %}
-          <div class="p-space-md rounded-xl transition-all flex flex-col justify-between shadow-sm border border-white/5 {% if vector.is_caution %}bg-[rgba(255,176,32,0.06)] hover:bg-[rgba(255,176,32,0.1)]{% else %}bg-surface-container-high/50 hover:bg-surface-container-high{% endif %}">
+          <div class="p-space-md rounded-xl transition-all flex flex-col justify-between shadow-sm border border-white/5 {% if vector.wide %}sm:col-span-2 {% endif %}{% if vector.is_caution %}bg-[rgba(255,176,32,0.06)] hover:bg-[rgba(255,176,32,0.1)]{% else %}bg-surface-container-high/50 hover:bg-surface-container-high{% endif %}">
             <div class="flex items-start justify-between">
               <div class="flex items-center gap-space-xs">
                 <div class="w-8 h-8 rounded-lg bg-surface-container flex items-center justify-center {% if vector.is_caution %}text-[#FFB020]{% else %}text-primary-container{% endif %}">

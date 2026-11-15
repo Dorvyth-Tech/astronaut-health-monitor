@@ -141,6 +141,25 @@
       <p class="font-body-sm text-body-sm text-on-surface-variant">{{ catalog.osdr_note }}</p>
     </section>
 
+    <!-- (d2) HRP hazards -->
+    <section class="w-full rounded-xl bg-surface-container/70 backdrop-blur-md p-space-lg shadow-xl border border-white/5 flex flex-col gap-space-sm">
+      <h2 class="font-headline-sm text-headline-sm text-on-surface tracking-wide">NASA HRP hazards</h2>
+      <p class="font-body-sm text-body-sm text-on-surface">
+        The dashboard groups indicators under NASA's
+        <a class="text-primary-container hover:underline" href="{{ catalog.hrp_hazards.hazards_url }}" rel="noopener noreferrer">five hazards of human spaceflight</a>.
+      </p>
+      <p class="font-body-sm text-body-sm text-on-surface-variant">
+        Distance from Earth: the tile takes the worst status of the 7 indicators, because the
+        Science Lead alert texts already say when to contact the flight surgeon or ground support.
+        It adds no new threshold. {{ catalog.hrp_hazards.comm_delay_note }}
+        Sources: <a class="text-primary-container hover:underline" href="{{ catalog.hrp_hazards.distance_url }}" rel="noopener noreferrer">NASA, Hazard: Distance From Earth</a>;
+        <a class="text-primary-container hover:underline" href="{{ catalog.hrp_hazards.comms_delay_url }}" rel="noopener noreferrer">NASA, Mars communications disruption and delay</a>.
+      </p>
+      <p class="font-body-sm text-body-sm text-on-surface-variant">
+        Radiation shows "No data": the prototype has no dosimeter input. Space weather from DONKI is context only.
+      </p>
+    </section>
+
     <!-- (e) Pulse Companion -->
     <section class="w-full rounded-xl bg-surface-container/70 backdrop-blur-md p-space-lg shadow-xl border border-white/5 flex flex-col gap-space-sm">
       <h2 class="font-headline-sm text-headline-sm text-on-surface tracking-wide">Pulse Companion</h2>
