@@ -253,7 +253,7 @@
             <span class="w-2 h-2 rounded-full bg-nominal"></span>
             Bio-telemetry stream active
           </span>
-          <span>Latency: 18m 42s</span>
+          <span>Latency: {{ comm_latency }}</span>
         </div>
 
         <!-- Primary Action Button: Sign In -->
@@ -294,7 +294,7 @@
             </button>
             <button 
               type="button" 
-              onclick="fillPreset('flight.surgeon@jsc.nasa.gov', 'validAccess2026')"
+              onclick="fillPreset('flight.surgeon@mission.example', 'validAccess2026')"
               class="px-2.5 py-1 rounded bg-white/5 hover:bg-violet/15 border border-white/10 hover:border-violet/40 text-xs text-white/80 transition-colors font-mono"
             >
               Flight Surgeon Vance

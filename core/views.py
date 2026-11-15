@@ -18,6 +18,7 @@ from django.http import JsonResponse
 from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST
 
+from core.ground_delay import comm_context, ground_panel_for, ground_ring
 from core.models import AstronautProfile, Baseline, GroundMessage
 from telemetry.models import Reading, CheckIn
 from alerts.models import Alert
@@ -56,6 +57,10 @@ def get_active_astronaut(request):
     """
     if not request.user.is_authenticated:
         return None
+
+    from core.demo import demo_astronaut, is_public_demo_user
+    if is_public_demo_user(request.user):
+        return demo_astronaut()
 
     if settings.DEMO_MODE:
         astro_id = request.session.get('active_astronaut_id')
@@ -142,6 +147,29 @@ def login_view(request):
         'next_url': next_url,
         'submitted_email': request.POST.get('email', 'amara.reyes@mission.example'),
     })
+
+
+@login_not_required
+@require_GET
+def public_demo_view(request):
+    """No-login entry for judges: sign in as a fresh read-only demo user.
+
+    404 unless PUBLIC_DEMO=True. Reuses the visitor's demo user if they already
+    have one. A real logged-in user is signed out first, so a judge never lands
+    in someone else's account.
+    """
+    from django.http import Http404
+    from core.demo import create_demo_user, demo_astronaut, is_public_demo_user, public_demo_enabled
+
+    if not public_demo_enabled():
+        raise Http404("Public demo is off.")
+    if demo_astronaut() is None:
+        raise Http404("No demo data loaded.")
+    if not is_public_demo_user(request.user):
+        if request.user.is_authenticated:
+            logout(request)
+        login(request, create_demo_user(), backend='django.contrib.auth.backends.ModelBackend')
+    return redirect('core:dashboard')
 
 
 @login_not_required
@@ -522,8 +550,10 @@ def dashboard_view(request):
         'companion_answers': companion_answers,
         'sleep_baseline': sleep_baseline,
         'sleep_caution_low': sleep_caution_low,
-        'next_ground_pass': 'T-01:14:22',
-        'comm_latency': '18m 42s',
+        # Filled only when a packet was really uplinked after the alerts fired;
+        # otherwise the template drafts the summary itself.
+        'ground_panel': ground_panel_for(astronaut, active_alerts),
+        **comm_context(),
     })
 
 
@@ -652,7 +682,7 @@ def profile_view(request):
 def ground_support_view(request):
     """
     Approved Ground Support Briefing & DSN Telemetry View matching design/ground_support.html.
-    Displays JSC Flight Surgeon brief, SVG HealthScoreRing (82/100), 2x2 grid of 7-day
+    Displays JSC Flight Surgeon brief, SVG HealthScoreRing (the dashboard's score), 2x2 grid of 7-day
     biometric vector charts, autonomous signals, simulated privacy mode, export controls,
     and interactive uplink messaging.
     """
@@ -681,7 +711,7 @@ def ground_support_view(request):
                 priority=priority,
                 flight_surgeon_ack="Queued for DSN Uplink (Pass 0412)"
             )
-            success_msg = f"Transmission packet logged and staged for DSN uplink pass. Estimated ground receipt in 18m 42s."
+            success_msg = f"Transmission packet logged and staged for DSN uplink pass. Estimated ground receipt in 3–22 min (NASA one-way range)."
 
     # Baselines
     baselines = get_baselines(astronaut)
@@ -720,6 +750,9 @@ def ground_support_view(request):
     co2_reading = Reading.objects.filter(astronaut=astronaut, metric='cabin_co2').order_by('-mission_day', '-timestamp').first()
     co2_val = int(round(co2_reading.value)) if co2_reading else 2450
 
+    # Same score as the dashboard (Science Lead indicators), never a fixed number.
+    ring = ground_ring(calculate_health_score(evaluate_astronaut_metrics(astronaut, baselines)))
+
     # Filter messages
     filter_type = request.GET.get('filter', 'all').lower()
     messages_query = GroundMessage.objects.filter(astronaut=astronaut).order_by('-timestamp')
@@ -734,10 +767,7 @@ def ground_support_view(request):
     return render(request, 'core/ground_support.html', {
         'active_nav': 'ground_support',
         'current_astronaut': astronaut,
-        'health_score': 82,
-        'health_circumference': 427.25,
-        'health_dashoffset': 76.9,
-        'physio_reserve': 88.4,
+        **ring,
         'flight_surgeon_name': "Dr. Marcus Vance",
         'flight_surgeon_console': "Ground Console JSC-MED-1",
         'sleep_latest': f"{sleep_latest:.1f}",
@@ -754,9 +784,6 @@ def ground_support_view(request):
         'ground_messages': messages_query,
         'selected_filter': filter_type,
         'success_message': success_msg,
-        'comm_latency': '18m 42s',
-        'round_trip_delay': '37m 24s',
-        'next_pass_countdown': 'T-01:14:22',
-        'signal_integrity': '99.8%',
+        **comm_context(),
         'dsn_station': 'Goldstone DSS-14 (70m)',
     })

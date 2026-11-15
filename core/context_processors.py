@@ -2,6 +2,8 @@ from datetime import datetime
 from django.conf import settings
 from django.utils import timezone
 
+from core.ground_delay import comm_context
+
 
 def get_greeting():
     """Returns morning, afternoon, or evening based on current hour."""
@@ -48,13 +50,18 @@ def spacepulse_context(request):
         except Exception:
             pass
 
+    from core.demo import READ_ONLY_MESSAGE, is_public_demo_user
+    public_demo = is_public_demo_user(getattr(request, 'user', None))
+
     return {
         'demo_mode': settings.DEMO_MODE,
+        # True only for /demo/ visitors: base.html shows the read-only banner.
+        'public_demo': public_demo,
+        'public_demo_message': READ_ONLY_MESSAGE,
         'is_simulated_data': is_simulated_data,
         'current_astronaut': astronaut,
         'greeting': get_greeting(),
         'unacknowledged_alerts_count': unacknowledged_alerts_count,
-        'next_ground_pass': 'T-01:14:22',
-        'comm_latency': '18m 42s',
-        'orbital_sync': '99.8%',
+        # NASA's published one-way delay range; pass and link values are labelled simulated.
+        **comm_context(),
     }

@@ -560,13 +560,34 @@ def calculate_health_score(metric_evals):
     }
 
 
+# Distance from Earth (NASA HRP hazard 5). No new thresholds: the tile reuses the
+# 7 indicator statuses, because the Science Lead alert texts already say when to
+# reach ground: every red text says contact the flight surgeon or ground support
+# today or now, and every amber text says escalate if it continues.
+NASA_HRP_HAZARDS_URL = "https://www.nasa.gov/hrp/hazards/"
+NASA_DISTANCE_HAZARD_URL = "https://www.nasa.gov/hrp/hazard-distance-from-earth/"
+NASA_MARS_COMMS_DELAY_URL = (
+    "https://www.nasa.gov/wp-content/uploads/2024/01/mars-communications-disruption-and-delay.pdf"
+)
+COMM_DELAY_NOTE = "Comm delay to Earth on a Mars mission: up to about 22 min one way (NASA)."
+DISTANCE_INDICATORS = ('resting_hr', 'hrv', 'exercise', 'body_temp', 'sleep', 'mood', 'cabin_co2')
+DISTANCE_GUIDANCE = {
+    'critical': "A red alert says to contact the flight surgeon or ground today. Start its steps now; a reply can take a while.",
+    'caution': "An amber alert says to escalate to ground if it continues. Follow its steps on board first.",
+    'nominal': "No alert calls for ground contact right now.",
+    'nodata': "No indicator data yet, so ground-contact need is unknown.",
+}
+
+
 def calculate_risk_vectors(metric_evals):
     """
-    Derives NASA Human Research Program (HRP) 4-domain risk matrix:
+    Derives the NASA Human Research Program (HRP) 5-hazard risk matrix:
     - Altered Gravity (Resting HR, HRV, Exercise)
     - Isolation (Mood, Sleep)
     - Closed Environment (Cabin CO2, Body temp)
     - Radiation (Prototype / No dosimeter data)
+    - Distance from Earth (worst of all 7 indicators, i.e. whether the Science
+      Lead alert texts call for ground contact, plus NASA's comm-delay figure)
     """
     def get_group_status(keys):
         # Worst status among the linked indicators that HAVE data.
@@ -583,6 +604,7 @@ def calculate_risk_vectors(metric_evals):
     grav_status, grav_label, grav_badge, grav_color = get_group_status(['resting_hr', 'hrv', 'exercise'])
     iso_status, iso_label, iso_badge, iso_color = get_group_status(['mood', 'sleep'])
     env_status, env_label, env_badge, env_color = get_group_status(['cabin_co2', 'body_temp'])
+    dist_status, dist_label, dist_badge, dist_color = get_group_status(DISTANCE_INDICATORS)
 
     return [
         {
@@ -628,6 +650,18 @@ def calculate_risk_vectors(metric_evals):
             'badge_class': 'bg-surface-container-highest text-outline font-label-caps text-label-caps',
             'indicators': 'No dosimeter data (prototype)',
             'is_caution': False,
+        },
+        {
+            'id': 'distance_from_earth',
+            'title': 'Distance from Earth',
+            'sub': 'Comm Delay & Autonomy',
+            'icon': 'satellite_alt',
+            'status': dist_status,
+            'label': dist_label,
+            'badge_class': dist_badge,
+            'indicators': f"{DISTANCE_GUIDANCE[dist_status]} {COMM_DELAY_NOTE}",
+            'is_caution': dist_status == 'caution',
+            'wide': True,
         },
     ]
 

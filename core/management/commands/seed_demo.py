@@ -90,7 +90,7 @@ class Command(BaseCommand):
         crew_members = [
             AstronautProfile.objects.create(
                 name="Leo Vance",
-                email="flight.surgeon@jsc.nasa.gov",
+                email="flight.surgeon@mission.example",
                 rank="Dr.",
                 mission_name="Deep-Space Transit Mars Transit Hab-1",
                 mission_total_days=540,
