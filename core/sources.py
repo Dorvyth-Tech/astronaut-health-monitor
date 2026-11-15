@@ -18,8 +18,12 @@ from core.constants import (
 )
 from core.services import (
     BIO_INDEX_HELP,
+    COMM_DELAY_NOTE,
     CUMULATIVE_STRESS_HELP,
     EXPERIMENTAL_TAG,
+    NASA_DISTANCE_HAZARD_URL,
+    NASA_HRP_HAZARDS_URL,
+    NASA_MARS_COMMS_DELAY_URL,
     PHYSIO_RESERVE_HELP,
 )
 from telemetry.models import Reading
@@ -229,6 +233,12 @@ def page_catalog(snapshot=None):
             "snapshot": snapshot_info(snapshot),
         },
         "osdr_url": OSDR_URL,
+        "hrp_hazards": {
+            "hazards_url": NASA_HRP_HAZARDS_URL,
+            "distance_url": NASA_DISTANCE_HAZARD_URL,
+            "comms_delay_url": NASA_MARS_COMMS_DELAY_URL,
+            "comm_delay_note": COMM_DELAY_NOTE,
+        },
         "osdr_note": OSDR_NOTE,
         "companion": {
             "disclaimer": companion.DISCLAIMER,
