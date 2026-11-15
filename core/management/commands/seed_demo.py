@@ -3,23 +3,61 @@ Management command to seed reproducible demo data for Space-Pulse.
 NASA Space Apps Challenge 2026.
 """
 
+import math
 import random
 from datetime import timedelta
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 from faker import Faker
 
 from core.models import AstronautProfile, Baseline, GroundMessage
 from telemetry.models import Reading, CheckIn
 from alerts.models import Alert
+from core import rules
 from core.constants import METRIC_CONFIG, METRICS
+from core.services import (
+    evaluate_metric_status,
+    readings_to_series,
+    sync_alerts_for_astronaut,
+)
 from django.contrib.auth.models import User
 
 
+# --- scenario "sleep_decline" (the 30-second demo story, day 142) -----------
+# Cmdr. Reyes' last 7 nights (days 136-142). The baseline is ~7.2 h, so
+# 6.0 / 5.9 / 5.8 are each more than 1 h below it on 3 nights in a row ending
+# today: AMBER by the science table (Sleep row), no trend rule needed.
+SCENARIO_SLEEP_NIGHTS = [7.2, 7.4, 7.3, 6.9, 6.0, 5.9, 5.8]
+# A short resting-HR episode on days 128-130 (about +14-16% for 3 days = amber),
+# back to normal afterwards. It becomes the older, already acknowledged alert.
+SCENARIO_HR_EPISODE = {128: 66.0, 129: 67.0, 130: 67.0}
+SCENARIO_NAMES = ('sleep_decline',)
+
+
 class Command(BaseCommand):
-    help = 'Seeds database with reproducible demo telemetry for Cmdr. Reyes and crew'
+    help = (
+        'Seeds database with reproducible demo telemetry for Cmdr. Reyes and crew. '
+        'Use --scenario=sleep_decline for the demo story computed by the science rules. '
+        'WARNING: this DELETES all existing missions, readings, alerts and users first.'
+    )
+
+    def add_arguments(self, parser):
+        parser.add_argument(
+            '--scenario',
+            choices=SCENARIO_NAMES,
+            default=None,
+            help='sleep_decline: day 142, a 3-night sleep decline (amber), hourly cabin CO2, '
+                 'baselines computed from days 1-14, alerts produced by the rules.',
+        )
 
     def handle(self, *args, **options):
+        scenario = options.get('scenario')
+        # call_command(scenario=...) skips argparse's choices check, and nothing
+        # must be deleted for a typo, so validate before the flush below.
+        if scenario and scenario not in SCENARIO_NAMES:
+            raise CommandError(f"Unknown scenario {scenario!r}. Choose from: {', '.join(SCENARIO_NAMES)}.")
+        if scenario:
+            self.stdout.write(self.style.WARNING(f"Scenario: {scenario}"))
         self.stdout.write(self.style.WARNING("Flushing existing mission telemetry..."))
         Alert.objects.all().delete()
         CheckIn.objects.all().delete()
@@ -111,6 +149,7 @@ class Command(BaseCommand):
                 'sleep': 7.2,
                 'exercise': 60.0,
                 'body_temp': 36.7,
+                'mood': 4.0,
                 'mood_stress': 3.0,
                 'cabin_co2': 2300.0,
             },
@@ -120,6 +159,7 @@ class Command(BaseCommand):
                 'sleep': 7.5,
                 'exercise': 60.0,
                 'body_temp': 36.6,
+                'mood': 4.0,
                 'mood_stress': 2.5,
                 'cabin_co2': 2300.0,
             },
@@ -129,6 +169,7 @@ class Command(BaseCommand):
                 'sleep': 7.0,
                 'exercise': 65.0,
                 'body_temp': 36.8,
+                'mood': 4.0,
                 'mood_stress': 3.2,
                 'cabin_co2': 2300.0,
             },
@@ -138,6 +179,7 @@ class Command(BaseCommand):
                 'sleep': 7.4,
                 'exercise': 55.0,
                 'body_temp': 36.7,
+                'mood': 4.0,
                 'mood_stress': 3.0,
                 'cabin_co2': 2300.0,
             },
@@ -172,6 +214,9 @@ class Command(BaseCommand):
             'cabin_co2': [2300.0, 2350.0, 2400.0, 2380.0, 2420.0, 2440.0, 2450.0],
         }
 
+        if scenario == 'sleep_decline':
+            cmdr_last_7['sleep'] = SCENARIO_SLEEP_NIGHTS
+
         for astro in all_astronauts:
             b_vals = baseline_templates[astro.id]
 
@@ -194,6 +239,9 @@ class Command(BaseCommand):
                 else:
                     rhr_val = round(b_vals['resting_hr'] + random.uniform(-3, 3), 1)
 
+                if scenario and astro == cmdr and day in SCENARIO_HR_EPISODE:
+                    rhr_val = SCENARIO_HR_EPISODE[day]
+
                 # 3. HRV
                 if is_cmdr_last_7:
                     hrv_val = cmdr_last_7['hrv'][last_7_idx]
@@ -212,7 +260,7 @@ class Command(BaseCommand):
                 else:
                     temp_val = round(b_vals['body_temp'] + random.uniform(-0.15, 0.15), 1)
 
-                # 6. Mood & Stress
+                # 6. Mood (1-5, scored) and stress (1-10, display only)
                 if is_cmdr_last_7:
                     stress_val = cmdr_last_7['mood_stress'][last_7_idx]
                 else:
@@ -227,13 +275,14 @@ class Command(BaseCommand):
                 else:
                     co2_val = round(b_vals['cabin_co2'] + random.uniform(-80, 80), 0)
 
-                # Create readings for the 7 metrics
+                # Create readings for the 7 indicators (plus the stress self-report)
                 day_metrics = [
                     ('resting_hr', rhr_val),
                     ('hrv', hrv_val),
                     ('sleep', sleep_val),
                     ('exercise', ex_val),
                     ('body_temp', temp_val),
+                    ('mood', mood_val),
                     ('mood_stress', stress_val),
                     ('cabin_co2', co2_val),
                 ]
@@ -246,7 +295,7 @@ class Command(BaseCommand):
                             value=m_val,
                             mission_day=day,
                             timestamp=day_timestamp,
-                            source='sensor' if m_key not in ('mood_stress',) else 'manual'
+                            source='simulated',
                         )
                     )
 
@@ -277,14 +326,29 @@ class Command(BaseCommand):
         CheckIn.objects.bulk_create(checkins_batch)
         self.stdout.write(f"Created {len(readings_batch)} readings and {len(checkins_batch)} check-ins.")
 
+        if scenario == 'sleep_decline':
+            self.apply_sleep_decline(cmdr, all_astronauts)
+
         # Ground Support Messages
         self.stdout.write("Populating Ground Support communication packets...")
+        if scenario == 'sleep_decline':
+            surgeon_body = (
+                "Good morning Amara. Flight Surgeon console notes three consecutive nights more than 1 h "
+                "below your 7.2 h baseline (6.0 h, 5.9 h, 5.8 h). Recommend a 45-minute light-schedule offset, "
+                "dimming cabin ambient luminaire spectrum to 2200K 90 minutes prior to sleep period."
+            )
+        else:
+            surgeon_body = (
+                "Good morning Amara. Flight Surgeon console notes a 4-consecutive-day downward sleep duration "
+                "trend (7.3h down to 5.8h). Recommend a 45-minute light-schedule offset, dimming cabin ambient "
+                "luminaire spectrum to 2200K 90 minutes prior to sleep period."
+            )
         GroundMessage.objects.create(
             astronaut=cmdr,
             sender="Flight Surgeon (GND-SURG-2)",
             callsign="HOU-SURG-2",
             subject="Bio-Telemetry Review: Transit Day 142 Sleep Deficit",
-            body="Good morning Amara. Flight Surgeon console notes a 4-consecutive-day downward sleep duration trend (7.3h down to 5.8h). Recommend a 45-minute light-schedule offset, dimming cabin ambient luminaire spectrum to 2200K 90 minutes prior to sleep period.",
+            body=surgeon_body,
             timestamp=timezone.now() - timedelta(hours=1, minutes=15),
             mission_day=142,
             is_incoming=True,
@@ -331,43 +395,47 @@ class Command(BaseCommand):
             flight_surgeon_ack="Transmitted Uplink"
         )
 
-        # Active Alerts
-        self.stdout.write("Configuring active and historical signals...")
-        # 1. Caution Alert: Sleep trending down
-        Alert.objects.create(
-            astronaut=cmdr,
-            metric="sleep",
-            severity="caution",
-            title="Sleep is trending down",
-            message="5.8 h today, down from 7.3 h four days ago. Your baseline is 7.2 h.",
-            mission_day=142,
-            timestamp=timezone.now() - timedelta(minutes=45),
-            acknowledged=False
-        )
+        if scenario:
+            # Alerts come from the rules (apply_sleep_decline), not from hand-written rows.
+            pass
+        else:
+            # Active Alerts
+            self.stdout.write("Configuring active and historical signals...")
+            # 1. Caution Alert: Sleep trending down
+            Alert.objects.create(
+                astronaut=cmdr,
+                metric="sleep",
+                severity="caution",
+                title="Sleep is trending down",
+                message="5.8 h today, down from 7.3 h four days ago. Your baseline is 7.2 h.",
+                mission_day=142,
+                timestamp=timezone.now() - timedelta(minutes=45),
+                acknowledged=False
+            )
 
-        # 2. Nominal Alert / Signal: Cabin CO2 steady
-        Alert.objects.create(
-            astronaut=cmdr,
-            metric="cabin_co2",
-            severity="nominal",
-            title="Cabin CO2 steady",
-            message="2,450 ppm, within range and 150 ppm above your baseline.",
-            mission_day=142,
-            timestamp=timezone.now() - timedelta(hours=1, minutes=15),
-            acknowledged=False
-        )
+            # 2. Nominal Alert / Signal: Cabin CO2 steady
+            Alert.objects.create(
+                astronaut=cmdr,
+                metric="cabin_co2",
+                severity="nominal",
+                title="Cabin CO2 steady",
+                message="2,450 ppm, within range and 150 ppm above your baseline.",
+                mission_day=142,
+                timestamp=timezone.now() - timedelta(hours=1, minutes=15),
+                acknowledged=False
+            )
 
-        # 3. Past acknowledged alert for historical audit testing
-        Alert.objects.create(
-            astronaut=cmdr,
-            metric="resting_hr",
-            severity="caution",
-            title="Resting HR elevation during high-workload EVA",
-            message="Resting heart rate reached 76 bpm following 4-hour airlock depressurization drill.",
-            mission_day=130,
-            timestamp=timezone.now() - timedelta(days=12),
-            acknowledged=True
-        )
+            # 3. Past acknowledged alert for historical audit testing
+            Alert.objects.create(
+                astronaut=cmdr,
+                metric="resting_hr",
+                severity="caution",
+                title="Resting HR elevation during high-workload EVA",
+                message="Resting heart rate reached 76 bpm following 4-hour airlock depressurization drill.",
+                mission_day=130,
+                timestamp=timezone.now() - timedelta(days=12),
+                acknowledged=True
+            )
 
         self.stdout.write(self.style.SUCCESS(
             "Successfully seeded Space-Pulse database!\n"
@@ -378,3 +446,76 @@ class Command(BaseCommand):
             f"- {GroundMessage.objects.count()} Ground comm packets\n"
             f"- {Alert.objects.count()} Alerts ({Alert.objects.filter(acknowledged=False).count()} active unacknowledged)"
         ))
+
+    def apply_sleep_decline(self, cmdr, all_astronauts):
+        """Turns the freshly generated data into the demo story.
+
+        1. Baselines are computed from days 1-14 (the science definition),
+           not copied from a template. The stress self-report is not one of
+           the 7 indicators, so it keeps its template value.
+        2. Cabin CO2 gets 48 hourly readings (shared habitat air, so every crew
+           member gets the same series). The old daily CO2 rows for days 141-142
+           are replaced, because the CO2 rules are hourly.
+        3. One older, acknowledged alert, written from the rule result.
+        4. The active alerts are produced by sync_alerts_for_astronaut.
+        """
+        # 1. Baselines from days 1-14
+        for astro in all_astronauts:
+            for metric in METRICS:
+                early = list(
+                    Reading.objects.filter(astronaut=astro, metric=metric, mission_day__lte=rules.BASELINE_DAYS)
+                    .values_list('mission_day', 'value')
+                )
+                baseline = rules.compute_baseline(early)
+                if baseline is None:
+                    raise CommandError(f"Baseline for {astro.name}/{metric}: days 1-14 are not all present.")
+                Baseline.objects.update_or_create(
+                    astronaut=astro, metric=metric, defaults={'baseline_value': round(baseline, 1)}
+                )
+
+        # 2. Hourly cabin CO2 for the last 48 hours (ends at 2,450 ppm, as on the HUD)
+        Reading.objects.filter(metric='cabin_co2', mission_day__gte=141).delete()
+        end = timezone.now().replace(minute=45, second=0, microsecond=0)
+        co2_rows = []
+        for hours_ago in range(47, -1, -1):          # oldest first
+            ppm = 2400 + 70 * math.sin(2 * math.pi * (47 - hours_ago) / 24) + random.uniform(-30, 30)
+            if 12 <= hours_ago <= 14:                # a mild scrubber-regeneration bump, stays under 3,500
+                ppm += 600
+            if hours_ago == 0:
+                ppm = 2450.0
+            for astro in all_astronauts:
+                co2_rows.append(Reading(
+                    astronaut=astro,
+                    metric='cabin_co2',
+                    value=round(ppm, 0),
+                    mission_day=142 if hours_ago < 24 else 141,
+                    timestamp=end - timedelta(hours=hours_ago),
+                    source='simulated',
+                ))
+        Reading.objects.bulk_create(co2_rows)
+
+        # 3. Older acknowledged alert, from the rule result on the data up to day 130
+        hr_rows = list(
+            Reading.objects.filter(astronaut=cmdr, metric='resting_hr', mission_day__lte=130)
+            .order_by('-mission_day', '-timestamp')
+            .values_list('mission_day', 'timestamp', 'value')[:30]
+        )
+        hr_rows.reverse()
+        hr_baseline = Baseline.objects.get(astronaut=cmdr, metric='resting_hr').baseline_value
+        result = evaluate_metric_status('resting_hr', readings_to_series('resting_hr', hr_rows), hr_baseline)
+        if result['status'] != 'caution':
+            raise CommandError(f"Scenario expects an amber heart-rate episode on day 130, got {result['status']}.")
+        Alert.objects.create(
+            astronaut=cmdr,
+            metric='resting_hr',
+            severity='caution',
+            title=f"{result['display_label']} caution",
+            message=f"{result['reason']} Your baseline is {hr_baseline:.1f} {result['unit']}.",
+            mission_day=130,
+            timestamp=hr_rows[-1][1],
+            acknowledged=True,
+        )
+
+        # 4. Active alerts from the rules
+        for astro in all_astronauts:
+            sync_alerts_for_astronaut(astro)

@@ -1,10 +1,21 @@
 """
 Core telemetry processing and clinical algorithms for Space-Pulse.
 NASA Human Research Program (HRP) spaceflight health assessment logic.
+
+The status rules themselves live in core/rules.py (pure functions, baseline
+relative, from the Science Lead table). This module is the glue: it loads
+readings from the database, hands them to the rules, and turns the answer into
+what the views and templates already understand.
 """
 
 from django.utils import timezone
-from core.constants import METRIC_CONFIG, METRICS
+from core import rules
+from core.constants import (
+    BASELINE_PLAUSIBLE_RANGE,
+    EXERCISE_WEEKLY_PLAN_MINUTES,
+    METRIC_CONFIG,
+    METRICS,
+)
 
 
 NUMBER_WORDS = {
@@ -20,61 +31,323 @@ NUMBER_WORDS = {
     10: "ten",
 }
 
+# --- status vocabulary ----------------------------------------------------
+# core/rules.py speaks green / amber / red / no_data. The database
+# (Alert.severity), the templates and the URL filters already speak
+# nominal / caution / critical, so we translate in ONE place instead of
+# migrating data. 'no_data' is new: it is never stored on an Alert, it only
+# shows on cards and history rows so a missing signal is never shown as green.
+STATUS_TO_SEVERITY = {
+    rules.GREEN: 'nominal',
+    rules.AMBER: 'caution',
+    rules.RED: 'critical',
+    rules.NO_DATA: 'no_data',
+}
+SEVERITY_TO_STATUS = {sev: status for status, sev in STATUS_TO_SEVERITY.items()}
 
-def evaluate_metric_status(metric_key, value, baseline_value=None):
+NO_DATA_COLOR = '#8E9AAF'
+
+# severity -> (badge_bg, badge_text, color_hex, label)
+# Nominal: #22E3A0 (Emerald green), Caution: #FFB020 (Amber), Critical: #ffb4ab (Red/Coral)
+SEVERITY_STYLE = {
+    'nominal': ('bg-[rgba(34,227,160,0.15)]', 'text-[#22E3A0]', '#22E3A0', 'Nominal'),
+    'caution': ('bg-[rgba(255,176,32,0.2)]', 'text-[#FFB020]', '#FFB020', 'Caution'),
+    'critical': ('bg-error-container/60', 'text-error', '#ffb4ab', 'Critical'),
+    'no_data': ('bg-surface-container-highest', 'text-outline', NO_DATA_COLOR, 'No data'),
+}
+
+# Readings with no science rule: the 1-10 stress self-report. It is not one of the
+# 7 indicators (METRICS), but it is still evaluated (always no_data) so the
+# 'cumulative stress' tile and the history page can use it. It never alerts.
+DISPLAY_ONLY_METRICS = ('mood_stress',)
+
+
+def status_to_severity(status):
+    """green/amber/red/no_data -> nominal/caution/critical/no_data."""
+    return STATUS_TO_SEVERITY[status]
+
+
+# --- readings -> the (t, value) shape the rules expect ---------------------
+
+def readings_to_series(metric_key, rows):
+    """[(mission_day, timestamp, value), ...] oldest first -> [(t, value), ...].
+
+    - Daily metrics: t is the mission day. If a day has several readings
+      (check-in plus a manual one) the newest wins: the rules need one value a day.
+    - cabin_co2: the rule is hourly, so t is the hour the reading was taken.
     """
-    Evaluates a metric's current value against baseline and thresholds.
-    Returns status: 'nominal', 'caution', or 'critical' plus UI styling helpers.
+    by_t = {}
+    for mission_day, timestamp, value in rows:
+        t = int(timestamp.timestamp() // 3600) if metric_key == 'cabin_co2' else mission_day
+        by_t[t] = value
+    return sorted(by_t.items())
+
+
+def weekly_totals(daily_series):
+    """[(day, minutes), ...] -> [(week_number, total_minutes), ...].
+
+    The exercise rule compares COMPLETED weeks with the weekly plan. A week
+    only counts when all 7 of its days have a reading, so the current partial
+    week (and weeks with gaps) are left out. Week 1 is days 1-7.
+    """
+    days_by_week = {}
+    for day, minutes in daily_series:
+        days_by_week.setdefault((day - 1) // 7 + 1, {})[day] = minutes
+    return [
+        (week, sum(days.values()))
+        for week, days in sorted(days_by_week.items())
+        if len(days) == 7
+    ]
+
+
+def load_series(astronaut, metric_key, limit=60):
+    """Latest `limit` readings of one metric as a rule-ready series."""
+    from telemetry.models import Reading
+    rows = list(
+        Reading.objects.filter(astronaut=astronaut, metric=metric_key)
+        .order_by('-mission_day', '-timestamp')
+        .values_list('mission_day', 'timestamp', 'value')[:limit]
+    )
+    rows.reverse()
+    return readings_to_series(metric_key, rows)
+
+
+def rule_baseline(astronaut, metric_key, stored_baselines):
+    """Baseline the rules should use, or None (rules then fail closed).
+
+    1. The stored Baseline row (set in the profile or by the seed), else
+    2. the mean of mission days 1-14 from the readings, else
+    3. None. We do NOT fall back to METRIC_CONFIG['default_baseline'] here:
+       a generic default is not a personal baseline.
+    """
+    stored = stored_baselines.get(metric_key)
+    if stored is not None:
+        return stored
+    from telemetry.models import Reading
+    early = Reading.objects.filter(
+        astronaut=astronaut, metric=metric_key, mission_day__lte=rules.BASELINE_DAYS
+    ).values_list('mission_day', 'value')
+    return rules.compute_baseline(list(early))
+
+
+# --- personal baselines ----------------------------------------------------
+# A baseline is COMPUTED by default (mean of mission days 1-14). Someone may
+# override it by hand; that is stored with a flag and always shown as a
+# "Manual override".
+
+def baseline_details(astronaut):
+    """metric -> {'value', 'kind', 'by', 'at'} for one astronaut.
+
+    kind is:
+      'manual'   a stored override (by = the user, at = when)
+      'computed' the mean of days 1-14, rounded to 1 decimal
+      'stored'   not enough readings to compute yet, so the saved value is used
+    A metric with none of these is left out (the rules then fail closed).
+    """
+    from core.models import Baseline
+    from telemetry.models import Reading
+
+    rows = {row.metric: row for row in Baseline.objects.filter(astronaut=astronaut)}
+    details = {}
+    for metric in list(METRICS) + [m for m in rows if m not in METRICS]:
+        row = rows.get(metric)
+        if row is not None and row.is_manual_override:
+            details[metric] = {
+                'value': row.baseline_value,
+                'kind': 'manual',
+                'by': row.overridden_by,
+                'at': row.overridden_at,
+            }
+            continue
+
+        early = Reading.objects.filter(
+            astronaut=astronaut, metric=metric, mission_day__lte=rules.BASELINE_DAYS
+        ).values_list('mission_day', 'value')
+        computed = rules.compute_baseline(list(early))
+        if computed is not None:
+            details[metric] = {'value': round(computed, 1), 'kind': 'computed'}
+        elif row is not None:
+            details[metric] = {'value': row.baseline_value, 'kind': 'stored'}
+    return details
+
+
+def get_baselines(astronaut):
+    """metric -> the baseline number to use (override, else computed, else stored)."""
+    return {metric: item['value'] for metric, item in baseline_details(astronaut).items()}
+
+
+def read_baseline_form(post, details):
+    """Read the profile form. Returns (changes, errors).
+
+    changes maps metric -> a new number (a manual override), or None, which means
+    "go back to the computed baseline". Values that did not change are skipped,
+    so just pressing Save does not turn every baseline into an override.
+    """
+    changes = {}
+    errors = []
+    for metric in METRICS:
+        label = METRIC_CONFIG[metric]['label']
+
+        if post.get(f'reset_{metric}'):
+            if details.get(metric, {}).get('kind') == 'manual':
+                changes[metric] = None
+            continue
+
+        raw = post.get(f'baseline_{metric}')
+        if raw is None or raw == '':
+            continue
+        try:
+            value = float(raw)
+        except ValueError:
+            errors.append(f"{label}: '{raw}' is not a number.")
+            continue
+
+        current = details.get(metric, {}).get('value')
+        if current is not None and abs(value - current) < 0.0001:
+            continue    # unchanged
+
+        low, high = BASELINE_PLAUSIBLE_RANGE[metric]
+        if not low <= value <= high:
+            errors.append(f"{label}: {raw} is outside the plausible range {low} to {high}.")
+            continue
+        changes[metric] = value
+    return changes, errors
+
+
+def save_baseline_changes(astronaut, changes, user):
+    """Store what read_baseline_form returned: overrides, or a reset to computed."""
+    from core.models import Baseline
+
+    for metric, value in changes.items():
+        if value is None:
+            # Back to computed: just remove the override row.
+            Baseline.objects.filter(astronaut=astronaut, metric=metric).delete()
+        else:
+            Baseline.objects.update_or_create(
+                astronaut=astronaut,
+                metric=metric,
+                defaults={
+                    'baseline_value': value,
+                    'is_manual_override': True,
+                    'overridden_by': user,
+                    'overridden_at': timezone.now(),
+                },
+            )
+
+
+# --- evaluating ------------------------------------------------------------
+
+def evaluate_metric_status(metric_key, series, baseline_value=None, rhr_status=None):
+    """Status of one metric from its recent series, via core/rules.py.
+
+    series: [(t, value), ...] oldest first (see readings_to_series).
+    baseline_value: the personal baseline, or None when not ready. Not used
+        for 'exercise': its plan is the fixed EXERCISE_WEEKLY_PLAN_MINUTES.
+    rhr_status: the resting-HR rule status, needed by the HRV combination rule.
+
+    Returns the dict the views/templates use: status is nominal / caution /
+    critical / no_data, plus label, badge classes, colour, latest value, etc.
+    'rule_status' (green/amber/red/no_data) and 'reason' come from the rules.
     """
     config = METRIC_CONFIG.get(metric_key, {})
-    caution_low = config.get('caution_low')
-    caution_high = config.get('caution_high')
-    critical_low = config.get('critical_low')
-    critical_high = config.get('critical_high')
 
-    status = 'nominal'
-
-    # Check critical bounds
-    if critical_low is not None and value <= critical_low:
-        status = 'critical'
-    elif critical_high is not None and value >= critical_high:
-        status = 'critical'
-    # Check caution bounds
-    elif caution_low is not None and value < caution_low:
-        status = 'caution'
-    elif caution_high is not None and value > caution_high:
-        status = 'caution'
-
-    # Style mapping per NASA HUD specification
-    # Nominal: #22E3A0 (Emerald green), Caution: #FFB020 (Amber), Critical: #ffb4ab (Red/Coral)
-    if status == 'nominal':
-        badge_bg = 'bg-[rgba(34,227,160,0.15)]'
-        badge_text = 'text-[#22E3A0]'
-        color_hex = '#22E3A0'
-        label = 'Nominal'
-    elif status == 'caution':
-        badge_bg = 'bg-[rgba(255,176,32,0.2)]'
-        badge_text = 'text-[#FFB020]'
-        color_hex = '#FFB020'
-        label = 'Caution'
+    if metric_key in DISPLAY_ONLY_METRICS:
+        result = rules.RuleResult(rules.NO_DATA, "Shown for reference. No science rule for this indicator yet.")
+    elif metric_key == 'exercise':
+        result = rules.evaluate('exercise', weekly_totals(series), EXERCISE_WEEKLY_PLAN_MINUTES)
     else:
-        badge_bg = 'bg-error-container/60'
-        badge_text = 'text-error'
-        color_hex = '#ffb4ab'
-        label = 'Critical'
+        result = rules.evaluate(metric_key, series, baseline_value, rhr_status=rhr_status)
+
+    severity = status_to_severity(result.status)
+    badge_bg, badge_text, color_hex, label = SEVERITY_STYLE[severity]
+    if metric_key in DISPLAY_ONLY_METRICS:
+        label = 'Self-report'
 
     return {
-        'status': status,
+        'status': severity,
+        'rule_status': result.status,
+        'reason': result.reason,
         'label': label,
         'badge_bg': badge_bg,
         'badge_text': badge_text,
         'color_hex': color_hex,
-        'value': value,
+        'value': series[-1][1] if series else None,
         'baseline': baseline_value if baseline_value is not None else config.get('default_baseline'),
         'unit': config.get('unit', ''),
         'display_label': config.get('label', metric_key),
         'icon': config.get('icon', 'vital_signs'),
     }
+
+
+def evaluate_astronaut_metrics(astronaut, stored_baselines=None):
+    """metric_key -> evaluation dict for the 7 indicators of one astronaut
+    (plus the display-only stress self-report, which is always no_data).
+
+    Resting HR is evaluated first because the HRV rule needs its status.
+    """
+    if stored_baselines is None:
+        stored_baselines = get_baselines(astronaut)
+
+    evals = {}
+    rhr_status = None
+    for metric_key in METRICS + list(DISPLAY_ONLY_METRICS):   # resting_hr comes before hrv
+        series = load_series(astronaut, metric_key)
+        baseline = rule_baseline(astronaut, metric_key, stored_baselines)
+        evals[metric_key] = evaluate_metric_status(metric_key, series, baseline, rhr_status=rhr_status)
+        if metric_key == 'resting_hr':
+            rhr_status = evals[metric_key]['rule_status']
+    return evals
+
+
+def reading_statuses(astronaut, metric_key, stored_baselines, window=30, history=90):
+    """reading id -> evaluation dict, as the status looked when each reading arrived.
+
+    Used by the history page to colour each logged reading. Each reading is
+    judged on the `window` readings ending at it, so an old reading is not
+    judged with knowledge from the future.
+    """
+    from telemetry.models import Reading
+    rows = list(
+        Reading.objects.filter(astronaut=astronaut, metric=metric_key)
+        .order_by('-mission_day', '-timestamp')
+        .values_list('id', 'mission_day', 'timestamp', 'value')[:history]
+    )
+    rows.reverse()
+    baseline = rule_baseline(astronaut, metric_key, stored_baselines)
+
+    statuses = {}
+    for i, row in enumerate(rows):
+        recent = [r[1:] for r in rows[max(0, i - window + 1):i + 1]]
+        series = readings_to_series(metric_key, recent)
+        statuses[row[0]] = evaluate_metric_status(metric_key, series, baseline)
+    return statuses
+
+
+def amber_edges(metric_key, baseline):
+    """Where the amber band starts, for chart guide lines: {'low': x, 'high': y}.
+
+    Mirrors core/rules.py (values are None when a side has no band). Always
+    derived from the baseline, never hardcoded.
+    """
+    edges = {'low': None, 'high': None}
+    if baseline is None:
+        return edges
+    if metric_key == 'sleep':
+        edges['low'] = baseline - 1.0          # more than 1 h below baseline
+    elif metric_key == 'hrv':
+        edges['low'] = baseline * 0.85         # more than 15% below
+    elif metric_key == 'exercise':
+        # The chart shows minutes per day, the plan is per week: 90% of the plan, per day.
+        edges['low'] = EXERCISE_WEEKLY_PLAN_MINUTES / 7 * 0.90
+    elif metric_key == 'mood':
+        edges['low'] = baseline - 0.5          # more than 0.5 points below baseline
+    elif metric_key == 'resting_hr':
+        edges['high'] = baseline * 1.10        # more than 10% above
+    elif metric_key == 'body_temp':
+        edges['high'] = baseline + 0.5         # more than 0.5 C above
+    elif metric_key == 'cabin_co2':
+        edges['high'] = 3500.0                 # absolute
+    return {side: (round(v, 2) if v is not None else None) for side, v in edges.items()}
 
 
 def detect_consecutive_trend(values):
@@ -178,66 +451,67 @@ def generate_sparkline_svg(values, width=70, height=20, padding=3):
 
 def calculate_health_score(metric_evals):
     """
-    Computes overall astronaut Health Score (0-100), Physio Reserve, and Cumulative Stress.
+    Overall astronaut Health Score (0-100), Physio Reserve, and Cumulative Stress.
     metric_evals: dict of metric_key -> evaluation dict from evaluate_metric_status
+
+    The score is core/rules.health_score: the mean of green 100 / amber 60 /
+    red 20 over the indicators that HAVE data. With fewer than 3 such
+    indicators there is no score ("--", an empty ring).
     """
-    weights = {
-        'sleep': 0.22,
-        'resting_hr': 0.18,
-        'hrv': 0.18,
-        'exercise': 0.14,
-        'cabin_co2': 0.12,
-        'body_temp': 0.08,
-        'mood_stress': 0.08,
-    }
+    statuses = [
+        SEVERITY_TO_STATUS[item['status']]
+        for item in metric_evals.values()
+        if item['status'] in SEVERITY_TO_STATUS
+    ]
+    score = rules.health_score(statuses)
 
-    total_score = 0.0
-    for key, weight in weights.items():
-        eval_item = metric_evals.get(key)
-        if not eval_item:
-            subscore = 85.0
-        elif eval_item['status'] == 'nominal':
-            subscore = 92.0
-        elif eval_item['status'] == 'caution':
-            subscore = 65.0
-        else:
-            subscore = 35.0
-        total_score += subscore * weight
-
-    # Rounded integer health score
-    score = int(round(total_score))
-    # Keep in 0-100 bounds
-    score = max(0, min(100, score))
-
-    if score >= 80:
-        label = "Nominal"
-        status = "nominal"
-        color = "#22E3A0"
-        bio_index = "Bio-Index: Stable"
-    elif score >= 60:
-        label = "Caution"
-        status = "caution"
-        color = "#FFB020"
-        bio_index = "Bio-Index: Elevated Workload"
+    if score is None:
+        label = "No data"
+        status = "no_data"
+        color = NO_DATA_COLOR
+        bio_index = "Bio-Index: Not enough data"
+        score_display = "--"
+        score_for_ring = 0
     else:
-        label = "Critical"
-        status = "critical"
-        color = "#ffb4ab"
-        bio_index = "Bio-Index: High Fatigue"
+        # Same bands as before: 80+ nominal, 60-79 caution, under 60 critical.
+        if score >= 80:
+            status = "nominal"
+        elif score >= 60:
+            status = "caution"
+        else:
+            status = "critical"
+        # A red indicator must never sit under a "Nominal" ring.
+        if status == "nominal" and rules.RED in statuses:
+            status = "caution"
+
+        if status == "nominal":
+            label = "Nominal"
+            color = "#22E3A0"
+            bio_index = "Bio-Index: Stable"
+        elif status == "caution":
+            label = "Caution"
+            color = "#FFB020"
+            bio_index = "Bio-Index: Elevated Workload"
+        else:
+            label = "Critical"
+            color = "#ffb4ab"
+            bio_index = "Bio-Index: High Fatigue"
+        score_display = score
+        score_for_ring = score
 
     # SVG circle calculation for 160x160 viewBox, r=70 (circumference = 2 * pi * 70 = ~439.82 -> 440)
     circumference = 440
     # dashoffset = circumference - (score / 100) * circumference
-    dashoffset = int(round(circumference - (score / 100.0) * circumference))
+    dashoffset = int(round(circumference - (score_for_ring / 100.0) * circumference))
 
     # Physio reserve: derive from sleep, HRV and resting HR
-    hrv_val = metric_evals.get('hrv', {}).get('value', 62.0)
-    sleep_val = metric_evals.get('sleep', {}).get('value', 6.0)
+    hrv_val = metric_evals.get('hrv', {}).get('value') or 62.0
+    sleep_val = metric_evals.get('sleep', {}).get('value') or 6.0
     reserve = 70.0 + (hrv_val / 62.0 * 10.0) + (sleep_val / 7.2 * 8.4)
     reserve = round(max(50.0, min(99.0, reserve)), 1)
 
     # Cumulative stress: derived from mood_stress metric
-    stress_val = metric_evals.get('mood_stress', {}).get('value', 3.0)
+    stress_val = metric_evals.get('mood_stress', {}).get('value') or 3.0
     if stress_val <= 3.5:
         cumulative_stress = "Low"
     elif stress_val <= 6.5:
@@ -246,7 +520,7 @@ def calculate_health_score(metric_evals):
         cumulative_stress = "Elevated"
 
     return {
-        'score': score,
+        'score': score_display,
         'label': label,
         'status': status,
         'color': color,
@@ -262,20 +536,24 @@ def calculate_risk_vectors(metric_evals):
     """
     Derives NASA Human Research Program (HRP) 4-domain risk matrix:
     - Altered Gravity (Resting HR, HRV, Exercise)
-    - Isolation (Mood & stress, Sleep)
+    - Isolation (Mood, Sleep)
     - Closed Environment (Cabin CO2, Body temp)
     - Radiation (Prototype / No dosimeter data)
     """
     def get_group_status(keys):
+        # Worst status among the linked indicators that HAVE data.
+        # If none has data, the group shows "No data" (same 'nodata' key as radiation).
         statuses = [metric_evals[k]['status'] for k in keys if k in metric_evals]
         if 'critical' in statuses:
             return 'critical', 'Critical', 'bg-error-container/60 text-error font-bold', '#ffb4ab'
         if 'caution' in statuses:
             return 'caution', 'Caution', 'bg-[rgba(255,176,32,0.2)] text-[#FFB020] font-bold', '#FFB020'
-        return 'nominal', 'Nominal', 'bg-[rgba(34,227,160,0.15)] text-[#22E3A0]', '#22E3A0'
+        if 'nominal' in statuses:
+            return 'nominal', 'Nominal', 'bg-[rgba(34,227,160,0.15)] text-[#22E3A0]', '#22E3A0'
+        return 'nodata', 'No data', 'bg-surface-container-highest text-outline font-label-caps text-label-caps', NO_DATA_COLOR
 
     grav_status, grav_label, grav_badge, grav_color = get_group_status(['resting_hr', 'hrv', 'exercise'])
-    iso_status, iso_label, iso_badge, iso_color = get_group_status(['mood_stress', 'sleep'])
+    iso_status, iso_label, iso_badge, iso_color = get_group_status(['mood', 'sleep'])
     env_status, env_label, env_badge, env_color = get_group_status(['cabin_co2', 'body_temp'])
 
     return [
@@ -298,7 +576,7 @@ def calculate_risk_vectors(metric_evals):
             'status': iso_status,
             'label': iso_label,
             'badge_class': iso_badge,
-            'indicators': 'Mood & stress, Sleep',
+            'indicators': 'Mood, Sleep',
             'is_caution': iso_status == 'caution',
         },
         {
@@ -328,73 +606,49 @@ def calculate_risk_vectors(metric_evals):
 
 def sync_alerts_for_astronaut(astronaut):
     """
-    Recomputes active alerts for the astronaut based on:
-    1. Metric threshold violations (e.g. sleep < 6.0, cabin co2 > 3000)
-    2. Dynamic consecutive trend detections (e.g. sleep dropping 4 days in a row)
-    Stores or updates Alert models in SQLite.
+    Recomputes active alerts for the astronaut from the science rules:
+    every metric whose status is caution (amber) or critical (red) gets an Alert.
+
+    Dedupe: the same metric at the same severity does not create a second alert
+    while one is still unacknowledged. Amber going to red creates a new red alert.
+    Trend-only alerts (four drops in a row) are gone: the science table has no
+    trend rule yet (open question Q5). The trend is still shown on the HUD.
     """
     from alerts.models import Alert
     from telemetry.models import Reading
-    from core.models import Baseline
 
-    # Get baselines
-    baselines = {b.metric: b.baseline_value for b in Baseline.objects.filter(astronaut=astronaut)}
+    evals = evaluate_astronaut_metrics(astronaut)
 
     for metric in METRICS:
-        recent_readings = list(
-            Reading.objects.filter(astronaut=astronaut, metric=metric)
-            .order_by('-mission_day', '-timestamp')[:7]
-        )
-        if not recent_readings:
+        eval_res = evals[metric]
+        severity = eval_res['status']
+        if severity not in ('caution', 'critical'):
             continue
 
-        latest_reading = recent_readings[0]
-        # Chronological order
-        chronological_vals = [r.value for r in reversed(recent_readings)]
-        baseline = baselines.get(metric, METRIC_CONFIG.get(metric, {}).get('default_baseline', 0))
+        already_active = Alert.objects.filter(
+            astronaut=astronaut,
+            metric=metric,
+            severity=severity,
+            acknowledged=False,
+        ).exists()
+        if already_active:
+            continue
 
-        eval_res = evaluate_metric_status(metric, latest_reading.value, baseline)
-        trend = detect_consecutive_trend(chronological_vals)
+        latest_reading = (
+            Reading.objects.filter(astronaut=astronaut, metric=metric)
+            .order_by('-mission_day', '-timestamp')
+            .first()
+        )
+        baseline = eval_res['baseline']
+        baseline_text = f" Your baseline is {baseline:.1f} {eval_res['unit']}." if baseline is not None else ""
 
-        if eval_res['status'] in ('caution', 'critical') or trend['flagged']:
-            severity = eval_res['status'] if eval_res['status'] != 'nominal' else 'caution'
-
-            # Dynamic alert messaging (never hardcoded)
-            if trend['flagged'] and trend['message']:
-                title = f"{eval_res['display_label']} is trending {trend['direction']}"
-                first_val = chronological_vals[0]
-                message = (
-                    f"{latest_reading.value:.1f} {eval_res['unit']} today, "
-                    f"down from {first_val:.1f} {eval_res['unit']} {trend['streak_days']} days ago. "
-                    f"Your baseline is {baseline:.1f} {eval_res['unit']}."
-                    if trend['direction'] == 'down' else
-                    f"{latest_reading.value:.1f} {eval_res['unit']} today, "
-                    f"up from {first_val:.1f} {eval_res['unit']} {trend['streak_days']} days ago. "
-                    f"Your baseline is {baseline:.1f} {eval_res['unit']}."
-                )
-            else:
-                title = f"{eval_res['display_label']} threshold {severity}"
-                message = (
-                    f"Current reading {latest_reading.value:.1f} {eval_res['unit']} is in {severity} range. "
-                    f"Baseline: {baseline:.1f} {eval_res['unit']}."
-                )
-
-            # Avoid duplicating active unacknowledged alert for the same metric today
-            existing_alert = Alert.objects.filter(
-                astronaut=astronaut,
-                metric=metric,
-                mission_day=latest_reading.mission_day,
-                acknowledged=False
-            ).first()
-
-            if not existing_alert:
-                Alert.objects.create(
-                    astronaut=astronaut,
-                    metric=metric,
-                    severity=severity,
-                    title=title,
-                    message=message,
-                    mission_day=latest_reading.mission_day,
-                    timestamp=latest_reading.timestamp,
-                    acknowledged=False
-                )
+        Alert.objects.create(
+            astronaut=astronaut,
+            metric=metric,
+            severity=severity,
+            title=f"{eval_res['display_label']} {severity}",
+            message=f"{eval_res['reason']}{baseline_text}",
+            mission_day=latest_reading.mission_day,
+            timestamp=latest_reading.timestamp,
+            acknowledged=False,
+        )

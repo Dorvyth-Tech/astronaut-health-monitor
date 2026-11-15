@@ -30,7 +30,8 @@ Space-Pulse is a deep-space astronaut health monitoring HUD and diagnostic web a
 ## Complete Pages & Capabilities
 
 1. **Cosmic Glassmorphic Login (`/login/`)**:
-   - Preset simulation credentials for quick 1-click astronaut cockpit access.
+   - Every other page needs a login; anonymous visitors are sent here first.
+   - Preset simulation credentials for 1-click astronaut cockpit access (only when `DEMO_MODE=True`).
    - Preserves destination routing via `?next=<path>` URL parameter.
    - Default crew login: `amara.reyes@mission.example` / `validAccess2026`.
 
@@ -52,7 +53,7 @@ Space-Pulse is a deep-space astronaut health monitoring HUD and diagnostic web a
    - Form submission automatically synchronizes to SQLite (`CheckIn` and `Reading` tables) and re-evaluates clinical alert triggers.
 
 4. **Telemetry History & Longitudinal Trends (`/history/`)**:
-   - Multi-metric selector across all 7 metrics (Sleep, Resting HR, HRV, Exercise, Body Temp, Mood & Stress, Cabin CO2).
+   - Multi-metric selector across all 7 metrics (Sleep, Resting HR, HRV, Exercise, Body Temp, Mood, Cabin CO2).
    - Time-range filters (7 Days, 30 Days, Mission Cycle).
    - Full-width Chart.js telemetry waveform with baseline dashed guides and caution threshold indicators.
    - Statistical KPI summary cards (Latest value, Baseline deviation $\pm\Delta$, Window Mean, Min/Max span).
@@ -60,8 +61,8 @@ Space-Pulse is a deep-space astronaut health monitoring HUD and diagnostic web a
 
 5. **Profile & Calibrated Baselines (`/profile/`)**:
    - Astronaut bio-identity dossier (Rank, Name, Habitat, Role, Email, Mission transit progress bar).
-   - Crew roster switcher to toggle and view any of the 4 seeded crew members.
-   - Fully editable baseline configuration form for all 7 metrics with clinical rationales and reference ranges.
+   - Crew roster switcher to view any of the 4 seeded crew members (only when `DEMO_MODE=True`; otherwise you only see your own astronaut).
+   - Baseline form for all 7 metrics with clinical rationales and reference ranges. Baselines are **computed** from mission days 1-14 by default. Typing a different value saves a labelled **manual override** (who and when are recorded), values outside a plausible range are refused, and "Use computed" removes the override.
    - Automatic SQLite persistence and dynamic alert recalibration upon saving.
 
 6. **Ground Support Communications (`/ground-support/`)**:
@@ -123,18 +124,27 @@ python manage.py seed_demo
 ```
 This populates:
 - **1 Commander (Cmdr. Amara Reyes)** as active HUD profile + 3 crew members (Dr. Leo Vance, Lt. Maya Chen, Dr. Alex Mercer).
-- **142 days** of biometric and habitat telemetry (3,976 readings and 568 daily check-ins).
+- **142 days** of biometric and habitat telemetry (4,544 readings and 568 daily check-ins).
 - Reproducible decline in Commander Reyes's sleep duration over the last 4 days (down to 5.8 h), triggering the Caution trend alert.
 - Ground support communication packets with Houston CapCom and Flight Surgeon GND-SURG-2.
 - Active and historical signals.
+- Every seeded reading is labelled `simulated`, and pages show a "SIMULATED DATA" banner while simulated readings are displayed. Reading sources are `manual` (check-in or typed entry), `csv`, `simulated` and `dataset`.
+- A login for each astronaut (e.g. `amara.reyes@mission.example` / `validAccess2026`). A login is linked to its astronaut by the same email.
 
-### 6. Run Test Suite
+### 6. Configuration (optional)
+Copy `.env.example` to `.env` to change settings. Today there is one:
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `DEMO_MODE` | `False` | `True` turns on the crew switcher, the login preset buttons and the shared demo password. Leave it off for anything that is not a demo. |
+
+### 7. Run Test Suite
 ```bash
 python manage.py test
 ```
-Executes all 17 automated tests across clinical algorithms, models, telemetry endpoints, and views.
+Runs all automated tests (rules, baselines, provenance, login, seeding, telemetry, alerts and views). It takes a couple of minutes because some tests seed the full demo data into a temporary test database; `db.sqlite3` is not touched.
 
-### 7. Run Local Development Server
+### 8. Run Local Development Server
 ```bash
 python manage.py runserver
 ```

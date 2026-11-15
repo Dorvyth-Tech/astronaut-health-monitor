@@ -8,9 +8,13 @@ METRICS = [
     'sleep',
     'exercise',
     'body_temp',
-    'mood_stress',
+    'mood',
     'cabin_co2',
 ]
+
+# Exercise plan from the Science Lead table: 150 minutes of resistance exercise
+# per week. The exercise rule compares each completed week against this number.
+EXERCISE_WEEKLY_PLAN_MINUTES = 150
 
 METRIC_CHOICES = [
     ('resting_hr', 'Resting Heart Rate'),
@@ -18,9 +22,23 @@ METRIC_CHOICES = [
     ('sleep', 'Sleep Duration'),
     ('exercise', 'Exercise Duration'),
     ('body_temp', 'Body Temperature'),
-    ('mood_stress', 'Mood & Stress'),
+    ('mood', 'Mood'),
+    ('mood_stress', 'Stress (self-report)'),
     ('cabin_co2', 'Cabin CO2 Concentration'),
 ]
+
+# Plausibility limits for a baseline someone types in by hand. They only catch
+# typing mistakes (a heart rate of 700, a mood of 40). They are NOT clinical
+# thresholds: the status rules live in core/rules.py.
+BASELINE_PLAUSIBLE_RANGE = {
+    'resting_hr': (30, 120),
+    'hrv': (5, 200),
+    'sleep': (2, 14),
+    'exercise': (0, 600),
+    'body_temp': (34, 40),
+    'mood': (1, 5),
+    'cabin_co2': (300, 10000),
+}
 
 SEVERITY_CHOICES = [
     ('nominal', 'Nominal'),
@@ -28,15 +46,14 @@ SEVERITY_CHOICES = [
     ('critical', 'Critical'),
 ]
 
-# Baseline defaults and thresholds per NASA HRP prototype requirements
+# Display metadata per metric (label, unit, icon, step) plus a DISPLAY-ONLY default
+# baseline. Status thresholds no longer live here: they are baseline-relative
+# rules in core/rules.py (Science Lead table).
 METRIC_CONFIG = {
     'resting_hr': {
         'label': 'Resting HR',
         'unit': 'bpm',
         'default_baseline': 58.0,
-        'caution_high': 75.0,
-        'critical_high': 95.0,
-        'caution_low': 45.0,
         'icon': 'monitor_heart',
         'step': 1,
     },
@@ -44,8 +61,6 @@ METRIC_CONFIG = {
         'label': 'HRV',
         'unit': 'ms',
         'default_baseline': 62.0,
-        'caution_low': 45.0,
-        'critical_low': 35.0,
         'icon': 'ecg',
         'step': 1,
     },
@@ -53,8 +68,6 @@ METRIC_CONFIG = {
         'label': 'Sleep',
         'unit': 'h',
         'default_baseline': 7.2,
-        'caution_low': 6.0,
-        'critical_low': 4.5,
         'icon': 'bedtime',
         'step': 0.1,
     },
@@ -62,8 +75,6 @@ METRIC_CONFIG = {
         'label': 'Exercise',
         'unit': 'min/d',
         'default_baseline': 60.0,
-        'caution_low': 40.0,
-        'critical_low': 20.0,
         'icon': 'fitness_center',
         'step': 1,
     },
@@ -71,28 +82,30 @@ METRIC_CONFIG = {
         'label': 'Body Temp',
         'unit': '°C',
         'default_baseline': 36.7,
-        'caution_low': 36.0,
-        'caution_high': 37.5,
-        'critical_high': 38.5,
-        'critical_low': 35.0,
         'icon': 'thermostat',
         'step': 0.1,
     },
-    'mood_stress': {
-        'label': 'Mood & Stress',
-        'unit': '/10',
-        'default_baseline': 3.0,  # stress level (1-10)
-        'caution_high': 6.0,
-        'critical_high': 8.0,
+    # Mood is one of the 7 scored indicators: the daily 1-5 score from the check-in.
+    'mood': {
+        'label': 'Mood',
+        'unit': '/5',
+        'default_baseline': 4.0,
         'icon': 'sentiment_satisfied',
+        'step': 0.1,
+    },
+    # Stress (1-10) is NOT one of the 7 indicators (it has no science rule). It is
+    # kept as a self-report reading for the ground-support page and history.
+    'mood_stress': {
+        'label': 'Stress',
+        'unit': '/10',
+        'default_baseline': 3.0,
+        'icon': 'psychology',
         'step': 1,
     },
     'cabin_co2': {
         'label': 'Cabin CO2',
         'unit': 'ppm',
         'default_baseline': 2450.0,
-        'caution_high': 3000.0,
-        'critical_high': 5000.0,
         'icon': 'air',
         'step': 25,
     },

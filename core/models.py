@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 from core.constants import METRIC_CHOICES
 
@@ -56,6 +57,19 @@ class Baseline(models.Model):
     )
     metric = models.CharField(max_length=30, choices=METRIC_CHOICES)
     baseline_value = models.FloatField()
+
+    # By default a baseline is COMPUTED from mission days 1-14 (core/services.py).
+    # Someone may type their own value instead. That is allowed, but it is always
+    # flagged here and shown as "Manual override" in the profile.
+    is_manual_override = models.BooleanField(default=False)
+    overridden_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='+',
+    )
+    overridden_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         verbose_name = "Baseline"

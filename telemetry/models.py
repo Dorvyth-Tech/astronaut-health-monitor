@@ -7,9 +7,12 @@ class Reading(models.Model):
     """
     Biometric or habitat telemetry reading for an astronaut.
     """
+    # Where the value came from (SRS FR-11). The labels are what the UI shows.
     SOURCE_CHOICES = [
-        ('sensor', 'Sensor'),
-        ('manual', 'Manual'),
+        ('manual', 'Self-reported'),
+        ('csv', 'CSV upload'),
+        ('simulated', 'Simulated'),
+        ('dataset', 'Dataset'),
     ]
 
     astronaut = models.ForeignKey(
@@ -21,7 +24,7 @@ class Reading(models.Model):
     value = models.FloatField()
     mission_day = models.PositiveIntegerField(db_index=True)
     timestamp = models.DateTimeField(default=timezone.now, db_index=True)
-    source = models.CharField(max_length=20, choices=SOURCE_CHOICES, default='sensor')
+    source = models.CharField(max_length=20, choices=SOURCE_CHOICES, default='manual')
 
     class Meta:
         verbose_name = "Reading"

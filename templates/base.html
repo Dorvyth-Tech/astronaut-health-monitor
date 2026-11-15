@@ -327,6 +327,13 @@
 
     <!-- Main Content Dynamic Container -->
     <main class="w-full pt-16 bg-transparent flex-1">
+      {% if is_simulated_data %}
+      <!-- Shown whenever the astronaut's readings are simulated demo data -->
+      <div class="w-full px-space-md py-1.5 text-center text-xs font-mono bg-[rgba(255,176,32,0.2)] text-[#FFB020] border-b border-[#FFB020]/30">
+        <span class="material-symbols-outlined text-[14px] align-middle">science</span>
+        SIMULATED DATA &mdash; demo crew values generated for this prototype, not real astronaut data.
+      </div>
+      {% endif %}
       {% block content %}{% endblock %}
     </main>
 
@@ -382,7 +389,8 @@
               <option value="sleep">Sleep Duration</option>
               <option value="exercise">Exercise Duration</option>
               <option value="body_temp">Body Temperature</option>
-              <option value="mood_stress">Mood &amp; Stress Level</option>
+              <option value="mood">Mood (1-5)</option>
+              <option value="mood_stress">Stress Level (1-10)</option>
               <option value="cabin_co2">Cabin CO2 Concentration</option>
             </select>
             <div class="absolute right-3 top-0 bottom-0 flex items-center pointer-events-none text-on-surface-variant">
@@ -450,6 +458,7 @@
       'sleep': 'h',
       'exercise': 'min',
       'body_temp': '°C',
+      'mood': '/5',
       'mood_stress': '/10',
       'cabin_co2': 'ppm'
     };
@@ -460,6 +469,7 @@
       'sleep': '6.0',
       'exercise': '60',
       'body_temp': '36.7',
+      'mood': '4',
       'mood_stress': '3',
       'cabin_co2': '2450'
     };

@@ -2,9 +2,12 @@
 Core views for Space-Pulse: Dashboard, Login, Logout, Profile, Ground Support.
 """
 
+from django.conf import settings
 from django.shortcuts import render, redirect, get_object_or_404
 from django.urls import reverse
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth.decorators import login_not_required
 from django.contrib.auth.models import User
 from django.contrib import messages
 from django.http import JsonResponse
@@ -15,7 +18,11 @@ from telemetry.models import Reading, CheckIn
 from alerts.models import Alert
 from core.constants import METRIC_CONFIG, METRICS
 from core.services import (
-    evaluate_metric_status,
+    baseline_details,
+    get_baselines,
+    read_baseline_form,
+    save_baseline_changes,
+    evaluate_astronaut_metrics,
     detect_consecutive_trend,
     generate_sparkline_svg,
     calculate_health_score,
@@ -24,31 +31,53 @@ from core.services import (
 )
 
 
+# The shared password of the seeded demo accounts. Outside DEMO_MODE it is just
+# the real password of those accounts; it is never a master key (see login_view).
+DEMO_PASSWORD = "validAccess2026"
+
+
 def get_active_astronaut(request):
-    """Helper to retrieve the current active astronaut from session or defaults."""
-    astro_id = request.session.get('active_astronaut_id')
-    if astro_id:
-        astro = AstronautProfile.objects.filter(id=astro_id).first()
+    """The astronaut whose data this request is allowed to see.
+
+    Normal mode: only the astronaut linked to the logged-in user (same email).
+    DEMO_MODE: the crew switcher may pick any astronaut (kept in the session).
+    Returns None when there is no such astronaut; views then go to the login page.
+    """
+    if not request.user.is_authenticated:
+        return None
+
+    if settings.DEMO_MODE:
+        astro_id = request.session.get('active_astronaut_id')
+        if astro_id:
+            astro = AstronautProfile.objects.filter(id=astro_id).first()
+            if astro:
+                return astro
+
+    if request.user.email:
+        astro = AstronautProfile.objects.filter(email__iexact=request.user.email).first()
         if astro:
             return astro
 
-    if request.user.is_authenticated and request.user.email:
-        astro = AstronautProfile.objects.filter(email=request.user.email).first()
-        if astro:
-            return astro
-
-    astro = AstronautProfile.objects.filter(is_active_commander=True).first()
-    if not astro:
-        astro = AstronautProfile.objects.first()
-    return astro
+    if settings.DEMO_MODE:
+        # e.g. the admin account in a demo: fall back to the commander
+        return (
+            AstronautProfile.objects.filter(is_active_commander=True).first()
+            or AstronautProfile.objects.first()
+        )
+    return None
 
 
+@login_not_required
 def login_view(request):
     """
     Cosmic glassmorphic login view.
     Authenticates crew credentials and routes to the requested path.
+    This view and logout_view are the only ones that do not need a login.
     """
     next_url = request.GET.get('next') or request.POST.get('next') or reverse('core:dashboard')
+    # Only follow ?next= to a page on this site.
+    if not url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()}):
+        next_url = reverse('core:dashboard')
     error_message = None
 
     if request.method == 'POST':
@@ -62,14 +91,14 @@ def login_view(request):
             user_match = User.objects.filter(username__iexact=email.split('@')[0]).first()
 
         if user_match:
-            # Check password or authenticate
-            if user_match.check_password(password) or password == "validAccess2026":
+            # Check the real password. In DEMO_MODE the shared demo password also works.
+            if user_match.check_password(password) or (settings.DEMO_MODE and password == DEMO_PASSWORD):
                 user = user_match
 
         # Fallback profile check for demo flexibility
         astro_match = AstronautProfile.objects.filter(email__iexact=email).first()
-        if not user and astro_match and password == "validAccess2026":
-            # If user record doesn't exist yet, create one
+        if not user and settings.DEMO_MODE and astro_match and password == DEMO_PASSWORD:
+            # If user record doesn't exist yet, create one (demo only)
             user, _ = User.objects.get_or_create(
                 username=email.split('@')[0],
                 email=email,
@@ -78,17 +107,22 @@ def login_view(request):
             user.set_password("validAccess2026")
             user.save()
 
-        if user:
-            login(request, user)
-            # Find matching astronaut profile
+        # Find the astronaut linked to this user (same email).
+        astro = None
+        if user and user.email:
             astro = AstronautProfile.objects.filter(email__iexact=user.email).first()
-            if not astro:
-                astro = AstronautProfile.objects.filter(is_active_commander=True).first()
-            if astro:
+        if user and not astro and settings.DEMO_MODE:
+            astro = AstronautProfile.objects.filter(is_active_commander=True).first()
+
+        if user and astro:
+            login(request, user)
+            if settings.DEMO_MODE:
                 request.session['active_astronaut_id'] = astro.id
 
             # Route to their requested path
             return redirect(next_url)
+        elif user:
+            error_message = "This account is not linked to an astronaut profile."
         else:
             error_message = "Email or password not recognised."
 
@@ -99,6 +133,7 @@ def login_view(request):
     })
 
 
+@login_not_required
 def logout_view(request):
     """Logs out user and redirects to the login screen."""
     logout(request)
@@ -119,13 +154,14 @@ def dashboard_view(request):
     sync_alerts_for_astronaut(astronaut)
 
     # Fetch personal baselines
-    baselines = {b.metric: b.baseline_value for b in Baseline.objects.filter(astronaut=astronaut)}
+    baselines = get_baselines(astronaut)
 
-    # Evaluate all 7 metrics with live readings
-    metric_evals = {}
+    # Evaluate all 7 metrics with the science rules (core/rules.py via services)
+    metric_evals = evaluate_astronaut_metrics(astronaut, baselines)
     metric_cards = []
     consecutive_drop_metric = None
     consecutive_drop_streak = 0
+    consecutive_trend_message = None
 
     for metric_key in METRICS:
         recent_reads = list(
@@ -136,9 +172,10 @@ def dashboard_view(request):
         chronological_vals = [r.value for r in chronological_reads]
         latest_val = chronological_vals[-1] if chronological_vals else baselines.get(metric_key, 0.0)
 
+        # Display baseline. The rules use their own (stored or computed) baseline
+        # and fail closed when there is none; this one is only for showing.
         baseline_val = baselines.get(metric_key, METRIC_CONFIG.get(metric_key, {}).get('default_baseline', 0.0))
-        eval_dict = evaluate_metric_status(metric_key, latest_val, baseline_val)
-        metric_evals[metric_key] = eval_dict
+        eval_dict = metric_evals[metric_key]
 
         trend = detect_consecutive_trend(chronological_vals)
         sparkline_svg = generate_sparkline_svg(chronological_vals, width=70, height=20)
@@ -147,16 +184,20 @@ def dashboard_view(request):
         if trend['flagged']:
             consecutive_drop_metric = eval_dict['display_label']
             consecutive_drop_streak = trend['streak_days']
+            consecutive_trend_message = trend['message']
 
         # Determine direction indicator
         if trend['direction'] == 'up':
             dir_label = 'Up'
             dir_icon = 'arrow_upward'
-            dir_class = 'text-[#22E3A0]' if eval_dict['status'] == 'nominal' else 'text-[#FFB020]'
+            dir_class = {
+                'nominal': 'text-[#22E3A0]',
+                'no_data': 'text-on-surface-variant',
+            }.get(eval_dict['status'], 'text-[#FFB020]')
         elif trend['direction'] == 'down':
             dir_label = 'Down'
             dir_icon = 'arrow_downward'
-            dir_class = 'text-[#FFB020]' if eval_dict['status'] != 'nominal' else 'text-on-surface-variant'
+            dir_class = 'text-[#FFB020]' if eval_dict['status'] in ('caution', 'critical') else 'text-on-surface-variant'
         else:
             dir_label = 'Steady'
             dir_icon = ''
@@ -167,7 +208,7 @@ def dashboard_view(request):
             formatted_val = f"{int(round(latest_val)):,}"
         elif metric_key in ('resting_hr', 'hrv', 'exercise'):
             formatted_val = f"{int(round(latest_val))}"
-        elif metric_key == 'mood_stress':
+        elif metric_key == 'mood':
             formatted_val = f"{int(round(latest_val))}"
         else:
             formatted_val = f"{latest_val:.1f}"
@@ -190,22 +231,30 @@ def dashboard_view(request):
             'direction_class': dir_class,
             'is_caution': eval_dict['status'] == 'caution',
             'is_critical': eval_dict['status'] == 'critical',
+            'is_no_data': eval_dict['status'] == 'no_data',
+            'reason': eval_dict['reason'],
             'baseline': baseline_val,
-            'mood_val': 4 if metric_key == 'mood_stress' else None,  # for mood/stress dual display
         })
 
     # Overall Health Score calculation
     health_score = calculate_health_score(metric_evals)
 
-    # Dynamic headline summary sentence (never hardcoded)
-    if consecutive_drop_metric and consecutive_drop_streak >= 3:
-        words = {3: "three", 4: "four", 5: "five", 6: "six"}
-        streak_word = words.get(consecutive_drop_streak, str(consecutive_drop_streak))
-        headline_summary = f"Mostly nominal. {consecutive_drop_metric} has dropped {streak_word} days in a row."
-    elif health_score['status'] == 'nominal':
-        headline_summary = "All vital biometrics and life support parameters within nominal thresholds."
+    # Dynamic headline summary sentence (never hardcoded).
+    # Based on the rule statuses first; the trend is only a mention.
+    flagged = {
+        'critical': [c['label'] for c in metric_cards if c['is_critical']],
+        'caution': [c['label'] for c in metric_cards if c['is_caution']],
+    }
+    if flagged['critical']:
+        headline_summary = f"Critical: {', '.join(flagged['critical'])} outside the personal baseline range. See alerts for steps."
+    elif flagged['caution']:
+        headline_summary = f"Caution: {', '.join(flagged['caution'])} drifting from the personal baseline."
+    elif health_score['status'] == 'no_data':
+        headline_summary = "Not enough baseline data yet to judge the crew's health score."
+    elif consecutive_drop_metric and consecutive_drop_streak >= 3:
+        headline_summary = f"Within baseline rules. {consecutive_drop_metric} {consecutive_trend_message}."
     else:
-        headline_summary = f"Telemetry alert: {health_score['label']} status flagged on mission cycle."
+        headline_summary = "All tracked indicators are within the personal baseline range."
 
     # NASA HRP Risk Vectors
     risk_vectors = calculate_risk_vectors(metric_evals)
@@ -239,8 +288,8 @@ def profile_view(request):
     Displays astronaut bio-dossier, crew roster, and editable physiological baselines.
     Handles POST submissions to update baselines and recalibrate active alerts.
     """
-    # Optional crew switcher
-    switch_id = request.GET.get('switch')
+    # Crew switcher: DEMO_MODE only. Otherwise ?switch= is ignored.
+    switch_id = request.GET.get('switch') if settings.DEMO_MODE else None
     if switch_id:
         target_astro = AstronautProfile.objects.filter(id=switch_id).first()
         if target_astro:
@@ -256,6 +305,11 @@ def profile_view(request):
 
     if request.method == 'POST':
         try:
+            # Check the baseline fields first, so nothing is saved if one is invalid.
+            baseline_changes, baseline_errors = read_baseline_form(request.POST, baseline_details(astronaut))
+            if baseline_errors:
+                raise ValueError(" ".join(baseline_errors))
+
             # Update astronaut profile attributes
             name_val = request.POST.get('name', '').strip()
             rank_val = request.POST.get('rank', '').strip()
@@ -272,17 +326,8 @@ def profile_view(request):
                 astronaut.role_description = role_val
             astronaut.save()
 
-            # Update baselines for all 7 metrics
-            for m_key in METRICS:
-                input_name = f"baseline_{m_key}"
-                raw_val = request.POST.get(input_name)
-                if raw_val is not None and raw_val != '':
-                    float_val = float(raw_val)
-                    Baseline.objects.update_or_create(
-                        astronaut=astronaut,
-                        metric=m_key,
-                        defaults={'baseline_value': float_val}
-                    )
+            # Only changed baselines are saved, and they become labelled manual overrides.
+            save_baseline_changes(astronaut, baseline_changes, request.user)
 
             # Recompute active signals and thresholds in SQLite
             sync_alerts_for_astronaut(astronaut)
@@ -291,7 +336,7 @@ def profile_view(request):
             error_message = f"Error saving baselines: {str(e)}"
 
     # Fetch updated baselines
-    current_baselines = {b.metric: b.baseline_value for b in Baseline.objects.filter(astronaut=astronaut)}
+    details = baseline_details(astronaut)
 
     # Clinical rationale annotations
     clinical_notes = {
@@ -315,9 +360,9 @@ def profile_view(request):
             'rationale': 'Core thermal balance baseline for monitoring spaceflight circadian disruption and infection.',
             'reference': '36.4 — 37.2 °C',
         },
-        'mood_stress': {
-            'rationale': 'Subjective cognitive stress rating (1-10); lower scores represent optimal psychological reserve.',
-            'reference': '1 — 4 /10',
+        'mood': {
+            'rationale': 'Daily self-reported mood (1-5). The rule watches for drops below your own baseline.',
+            'reference': '1 (lowest) — 5 (highest)',
         },
         'cabin_co2': {
             'rationale': 'Atmospheric life support setpoint for closed habitat environmental control loop.',
@@ -328,7 +373,8 @@ def profile_view(request):
     baseline_items = []
     for m_key in METRICS:
         cfg = METRIC_CONFIG.get(m_key, {})
-        val = current_baselines.get(m_key, cfg.get('default_baseline', 0.0))
+        detail = details.get(m_key, {})
+        val = detail.get('value', cfg.get('default_baseline', 0.0))
         note = clinical_notes.get(m_key, {})
 
         baseline_items.append({
@@ -338,11 +384,15 @@ def profile_view(request):
             'icon': cfg.get('icon', 'insights'),
             'step': cfg.get('step', 1),
             'value': val,
+            'kind': detail.get('kind', 'none'),     # manual / computed / stored / none
+            'by': detail.get('by'),
+            'at': detail.get('at'),
             'rationale': note.get('rationale', ''),
             'reference': note.get('reference', ''),
         })
 
-    all_crew = AstronautProfile.objects.all().order_by('id')
+    # The crew list is only shown (and only loaded) in DEMO_MODE.
+    all_crew = AstronautProfile.objects.all().order_by('id') if settings.DEMO_MODE else AstronautProfile.objects.none()
 
     return render(request, 'core/profile.html', {
         'active_nav': 'profile',
@@ -389,7 +439,7 @@ def ground_support_view(request):
             success_msg = f"Transmission packet logged and staged for DSN uplink pass. Estimated ground receipt in 18m 42s."
 
     # Baselines
-    baselines = {b.metric: b.baseline_value for b in Baseline.objects.filter(astronaut=astronaut)}
+    baselines = get_baselines(astronaut)
 
     # Recent 7 readings per metric for vector cards
     def get_recent_7(metric_name, default_vals):
