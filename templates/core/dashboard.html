@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load ground_panel body_figure %}
 
 {% block title %}Dashboard | Space-Pulse HUD{% endblock %}
 
@@ -65,10 +66,10 @@
         <circle cx="280" cy="80" r="220" stroke-dasharray="2 12" stroke-width="1"></circle>
       </svg>
 
-      <div class="flex flex-col md:flex-row items-center justify-between gap-space-xl relative z-10">
+      <div class="flex flex-col xl:flex-row items-center justify-between gap-space-xl relative z-10">
         
         <!-- Left: HealthScoreRing -->
-        <div class="flex items-center gap-space-lg">
+        <div class="flex flex-col sm:flex-row items-center gap-space-md sm:gap-space-lg min-w-0 max-w-full text-center sm:text-left">
           <div class="relative w-40 h-40 flex items-center justify-center shrink-0">
             <svg aria-label="Health score {{ health_score.score }} out of 100, {{ health_score.label }}" class="w-40 h-40 transform -rotate-90" role="img" viewBox="0 0 160 160">
               <!-- Background Track -->
@@ -91,8 +92,8 @@
             </div>
           </div>
 
-          <div class="flex flex-col">
-            <div class="flex items-center gap-space-sm mb-space-xs">
+          <div class="flex flex-col items-center sm:items-start min-w-0">
+            <div class="flex flex-wrap items-center justify-center sm:justify-start gap-space-sm mb-space-xs">
               <span class="inline-flex items-center gap-1.5 px-space-sm py-1 rounded-full bg-[rgba(34,227,160,0.12)] text-[#22E3A0] font-label-caps text-label-caps uppercase tracking-wider shadow-[0_0_12px_rgba(34,227,160,0.2)]">
                 <span class="w-2 h-2 rounded-full" style="background-color: {{ health_score.color }};"></span>
                 {{ health_score.label }}
@@ -105,7 +106,7 @@
             <p class="font-headline-sm text-headline-sm text-on-surface font-semibold max-w-lg">
               {{ headline_summary }}
             </p>
-            <p class="font-body-sm text-body-sm text-on-surface-variant mt-space-xs flex items-center gap-1">
+            <p class="font-body-sm text-body-sm text-on-surface-variant mt-space-xs flex items-center justify-center sm:justify-start gap-1">
               <span class="material-symbols-outlined text-[14px]">update</span>
               Updated Day {{ current_astronaut.current_mission_day }} · 07:45
             </p>
@@ -113,7 +114,7 @@
         </div>
 
         <!-- Right: Diagnostic Highlights -->
-        <div class="grid grid-cols-2 gap-space-md w-full md:w-auto bg-surface-container-lowest/60 p-space-md rounded-xl backdrop-blur-sm shrink-0 border border-white/5">
+        <div class="grid grid-cols-2 gap-space-md w-full xl:w-auto bg-surface-container-lowest/60 p-space-md rounded-xl backdrop-blur-sm shrink-0 border border-white/5">
           <div class="flex flex-col">
             <span class="font-label-caps text-label-caps text-outline uppercase">Physio Reserve</span>
             <span class="font-telemetry-metric text-telemetry-metric text-primary mt-0.5">{{ health_score.physio_reserve }}</span>
@@ -145,7 +146,7 @@
 
       <div class="flex gap-space-sm overflow-x-auto pb-space-sm pt-space-xs snap-x no-scrollbar">
         {% for card in metric_cards %}
-        <div class="min-w-[170px] flex-1 snap-start p-space-md rounded-xl transition-all flex flex-col justify-between shadow-md border {% if card.is_caution %}bg-[rgba(255,176,32,0.08)] border-[#FFB020]/30 shadow-[0_0_16px_rgba(255,176,32,0.18)] hover:bg-[rgba(255,176,32,0.12)]{% elif card.is_critical %}bg-error-container/20 border-error/40 shadow-[0_0_16px_rgba(255,77,109,0.2)]{% else %}bg-surface-container/60 border-white/5 hover:bg-surface-container-high{% endif %}">
+        <div id="metric-{{ card.key }}" tabindex="-1" class="scroll-mt-24 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-container min-w-[170px] flex-1 snap-start p-space-md rounded-xl transition-all flex flex-col justify-between shadow-md border {% if card.is_caution %}bg-[rgba(255,176,32,0.08)] border-[#FFB020]/30 shadow-[0_0_16px_rgba(255,176,32,0.18)] hover:bg-[rgba(255,176,32,0.12)]{% elif card.is_critical %}bg-error-container/20 border-error/40 shadow-[0_0_16px_rgba(255,77,109,0.2)]{% else %}bg-surface-container/60 border-white/5 hover:bg-surface-container-high{% endif %}">
           <div class="flex items-center justify-between">
             <span class="material-symbols-outlined text-[20px] {% if card.is_caution %}text-[#FFB020]{% elif card.is_critical %}text-error{% else %}text-primary-container{% endif %}">
               {{ card.icon }}
@@ -311,6 +312,12 @@
       </div>
 
     </div>
+
+    <!-- ROW 3b: Ground is ~20 minutes away (only when there is an active caution/critical alert) -->
+    {% ground_delay_panel alerts=active_alerts link=True %}
+
+    <!-- ROW 3c: Clickable body map (links to the indicator cards above) -->
+    {% body_figure metric_cards %}
 
     <!-- ROW 4: Risk Panel (8 cols, 2x2 tiles) + Quick Actions (4 cols) -->
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-space-lg">
