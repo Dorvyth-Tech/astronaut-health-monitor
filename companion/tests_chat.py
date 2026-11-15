@@ -649,3 +649,32 @@ class DashboardPanelTests(ChatTestCase):
                 if file.name == 'tests_chat.py':
                     continue
                 self.assertIsNone(banned.search(file.read_text(encoding='utf-8')), str(file))
+
+
+# --- shared per-user LLM rate limit (core/llm.py _allow_live_llm) -------------------------
+
+
+class RateLimitTests(ChatTestCase):
+    def test_small_talk_falls_back_to_fixed_reply_when_over_the_limit(self):
+        with override_settings(COMPANION_LLM_ENABLED=True, COMPANION_LLM_RATE_LIMIT=1), \
+                env(GROQ_API_KEY=FAKE_GROQ_KEY), \
+                mock.patch('companion.chat.llm._query_providers', return_value=('groq', 'Hello. Good to see you.')) as query:
+            first = self.say('hello').json()['reply']
+            second = self.say('hello again').json()['reply']
+        self.assertEqual(first['kind'], 'smalltalk')
+        self.assertEqual(second['kind'], 'fixed')
+        query.assert_called_once()
+
+    def test_the_limit_is_per_user(self):
+        with override_settings(COMPANION_LLM_ENABLED=True, COMPANION_LLM_RATE_LIMIT=1), \
+                env(GROQ_API_KEY=FAKE_GROQ_KEY), \
+                mock.patch('companion.chat.llm._query_providers', return_value=('groq', 'Hello. Good to see you.')) as query:
+            self.say('hello')
+            other = self.say('hello', client=self.client_b).json()['reply']
+        self.assertEqual(other['kind'], 'smalltalk')
+        self.assertEqual(query.call_count, 2)
+
+    def test_the_view_passes_the_logged_in_user(self):
+        with mock.patch('companion.views.chat.build_reply', wraps=chat.build_reply) as build:
+            self.say('hello')
+        self.assertEqual(build.call_args.kwargs['user'], self.user_a)

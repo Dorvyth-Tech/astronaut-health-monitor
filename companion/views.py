@@ -181,7 +181,8 @@ def send_view(request):
             reply, new_memory = _remember_reply(request.user, memory_text)
         else:
             new_memory = None
-            reply = chat.build_reply(question, astronaut, memories, _recent_turns(conversation), turn_index)
+            reply = chat.build_reply(question, astronaut, memories, _recent_turns(conversation), turn_index,
+                                     user=request.user)
     except Exception as exc:    # a bug must not look like an answer; the text is never logged
         logger.warning('Pulse chat reply failed: %s', type(exc).__name__)
         return JsonResponse({'error': 'Pulse could not answer just now. Please try again.'}, status=500)

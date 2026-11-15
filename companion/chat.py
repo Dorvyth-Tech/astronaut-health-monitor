@@ -201,7 +201,7 @@ def _provider_label(answer):
 # --- health routing (same as Ask Pulse) ------------------------------------------------
 
 
-def _route_health(question):
+def _route_health(question, user=None):
     """(intent_id or None, method). Keywords first, then the model may pick from the fixed list."""
     intent_id = intent.classify_by_keywords(question)
     method = intent.KEYWORD
@@ -210,24 +210,24 @@ def _route_health(question):
         if get_space_weather(allow_refresh=False):
             allowed_ids = (*allowed_ids, 'radiation')
             descriptions = {**descriptions, 'radiation': intent.RADIATION_INTENT_DESCRIPTION}
-        picked = llm.classify_intent_with_llm(question, allowed_ids, descriptions)
+        picked = llm.classify_intent_with_llm(question, allowed_ids, descriptions, user=user)
         if picked:
             intent_id, method = picked[0], intent.AI
     return intent_id, method
 
 
-def _health_reply(intent_id, astronaut):
+def _health_reply(intent_id, astronaut, user=None):
     """The Pulse reply for a routed intent, or None when there is no answer for it."""
     from core import views     # late import: core.views is the home of the Ask Pulse answer builders
 
     if intent_id == 'radiation':
-        answer = views._space_weather_answer()
+        answer = views._space_weather_answer(user=user)
         if answer is None:
             return _reply(intent.NO_RADIATION_DATA_NOTE, FIXED, intent_id='radiation',
                           severity=companion.NO_DATA)
         freshness = ''
     else:
-        answer = views._ask_pulse_answer(intent_id, astronaut)
+        answer = views._ask_pulse_answer(intent_id, astronaut, user=user)
         if answer is None:
             return None
         indicator = answer.get('indicator')
@@ -313,13 +313,15 @@ FAIL_KEY = 'pulse_chat:llm_failed'
 FAIL_SECONDS = 60
 
 
-def _llm_smalltalk(question, memories, recent):
+def _llm_smalltalk(question, memories, recent, user=None):
     """(reply, provider_label) from the model, or None (off, no key, failure, unsafe reply)."""
     try:
         if not settings.COMPANION_LLM_ENABLED:
             return None
         order = llm._provider_order()
         if not order or cache.get(FAIL_KEY):
+            return None
+        if not llm._allow_live_llm(user):     # shared per-user budget (core/llm.py)
             return None
         user_text = json.dumps({
             'message': question,
@@ -351,8 +353,8 @@ def _fixed_smalltalk(question, turn_index):
     return GENERIC_TEXT
 
 
-def _smalltalk_reply(question, memories, recent, turn_index):
-    result = _llm_smalltalk(question, memories, recent)
+def _smalltalk_reply(question, memories, recent, turn_index, user=None):
+    result = _llm_smalltalk(question, memories, recent, user=user)
     if result:
         return _reply(result[0], SMALLTALK, ai_provider=result[1])
     text = _fixed_smalltalk(question, turn_index)
@@ -384,7 +386,7 @@ def memory_reply_for_recall(memories):
 # --- entry point ----------------------------------------------------------------------------
 
 
-def build_reply(question, astronaut, memories=(), recent=(), turn_index=0):
+def build_reply(question, astronaut, memories=(), recent=(), turn_index=0, user=None):
     """Pulse's reply (a dict, see _reply) to one already-validated message.
 
     Memory phrases ("remember that ...") are handled by the view, which owns the database
@@ -407,13 +409,13 @@ def build_reply(question, astronaut, memories=(), recent=(), turn_index=0):
     social_pattern = bool(LONELY.search(question) or GREETING.search(question)
                           or FUN.search(question) or THANKS.search(question))
     if keyword_intent is None and social_pattern:
-        return _smalltalk_reply(question, memories, recent, turn_index)
+        return _smalltalk_reply(question, memories, recent, turn_index, user=user)
     if keyword_intent == 'mood' and _is_feeling_statement(question):
-        return _smalltalk_reply(question, memories, recent, turn_index)
+        return _smalltalk_reply(question, memories, recent, turn_index, user=user)
 
-    intent_id, _method = _route_health(question)
+    intent_id, _method = _route_health(question, user=user)
     if intent_id is not None:
-        reply = _health_reply(intent_id, astronaut)
+        reply = _health_reply(intent_id, astronaut, user=user)
         if reply is not None:
             return reply
-    return _smalltalk_reply(question, memories, recent, turn_index)
+    return _smalltalk_reply(question, memories, recent, turn_index, user=user)
