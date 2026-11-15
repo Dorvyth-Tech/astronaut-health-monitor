@@ -41,6 +41,18 @@ class SeededPagesTests(TestCase):
         self.assertEqual(len(resp.context['metric_cards']), 7)
         self.assertIn('score', resp.context['health_score'])
 
+    def test_dashboard_body_temp_unit_is_degree_c(self):
+        # Regression: the unit must be a real degree sign, not the mojibake 'Â°'
+        # that appears when UTF-8 '°C' is decoded as Windows-1252 / Latin-1.
+        resp = self.get_ok(reverse('core:dashboard'))
+        html = resp.content.decode('utf-8')
+        self.assertIn('°C', html)
+        self.assertNotIn('Â°', html)
+        check_in = self.get_ok(reverse('telemetry:check_in'))
+        check_html = check_in.content.decode('utf-8')
+        self.assertIn('°C', check_html)
+        self.assertNotIn('Â°', check_html)
+
     def test_history_renders_in_every_view_and_filter(self):
         base = reverse('telemetry:history')
         for query in ('', '?view=timeline', '?severity=caution', '?severity=critical',
